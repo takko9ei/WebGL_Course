@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>House Homework</title>
+    <meta name="author" content="LI Zhuohang (5125EG13-0)" />
+    <script>
+      let canvas; // DOM object corresponding to the canvas
+      let graphics; // 2D graphics context for drawing to the canvas
+      // Drawing function
+      function draw() {
+        graphics.clearRect(0, 0, canvas.width, canvas.height);
+        graphics.lineCap = "round";
+        graphics.lineJoin = "round";
+
+        graphics.strokeStyle = "#262020";
+        graphics.lineWidth = 16;
+        graphics.fillStyle = "#a1a8ae";
+        graphics.clearRect(0, 0, canvas.width, canvas.height);
+        graphics.beginPath();
+        graphics.rect(600, 1740, 2000, 60);
+        graphics.fill();
+        graphics.stroke();
+
+        graphics.fillStyle = "#efe7da";
+        graphics.beginPath();
+        graphics.moveTo(750, 1740);
+        graphics.lineTo(750, 1000);
+        graphics.lineTo(1600, 540);
+        graphics.lineTo(2450, 1000);
+        graphics.lineTo(2450, 1740);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+
+        graphics.fillStyle = "#c7877a";
+        graphics.beginPath();
+        //ll
+        graphics.moveTo(750, 1000);
+        graphics.lineTo(680, 1040);
+        graphics.lineTo(630, 960);
+        graphics.lineTo(1600, 426);
+        //rr
+        graphics.lineTo(2570, 960);
+        graphics.lineTo(2520, 1040);
+        graphics.lineTo(2450, 1000);
+        graphics.lineTo(1600, 540);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+
+        graphics.fillStyle = "#c0775a";
+        graphics.beginPath();
+        graphics.rect(1000, 1100, 460, 640);
+        graphics.fill();
+        graphics.stroke();
+
+        // graphics.beginPath();
+        // graphics.rect(1000, 1100, 460, 640);
+        // graphics.stroke();
+
+        graphics.fillStyle = "#a2c3c8";
+        graphics.beginPath();
+        graphics.rect(1760, 1060, 420, 440);
+        graphics.fill();
+        graphics.stroke();
+
+        graphics.fillStyle = "#c7877a";
+        graphics.beginPath();
+        graphics.rect(1720, 1500, 500, 40);
+        graphics.fill();
+        graphics.stroke();
+
+        graphics.beginPath();
+        graphics.moveTo(1970, 1060);
+        graphics.lineTo(1970, 1500);
+        graphics.moveTo(1760, 1280);
+        graphics.lineTo(2180, 1280);
+        graphics.stroke();
+
+        graphics.lineWidth = 12;
+        graphics.beginPath();
+        graphics.rect(1050, 1150, 360, 226);
+        graphics.rect(1050, 1450, 360, 226);
+        graphics.stroke();
+      }
+      function resize() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        if (w / h > 1.6) {
+          canvas.style.width = h * 1.6 + "px";
+          canvas.style.height = h + "px";
+        } else {
+          canvas.style.width = w + "px";
+          canvas.style.height = w / 1.6 + "px";
+        }
+        draw();
+      }
+      // Initialization function
+      function init() {
+        canvas = document.getElementById("myCanvas");
+        graphics = canvas.getContext("2d");
+        resize(); // Draw onto the canvas
+      }
+      window.onload = init; // Runs when window is loaded
+      window.addEventListener("resize", resize); // Runs when window is resized
+    </script>
+  </head>
+  <body>
+    <canvas width="3200" height="2000" id="myCanvas"></canvas>
+  </body>
+</html>
