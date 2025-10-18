@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>House Homework</title>
+    <meta name="author" content="LI Zhuohang (5125EG13-0)" />
+    <script>
+      let canvas; // DOM object corresponding to the canvas
+      let graphics; // 2D graphics context for drawing to the canvas
+      // Drawing function
+      function draw() {
+        graphics.clearRect(0, 0, canvas.width, canvas.height);
+        graphics.lineCap = "round";
+        graphics.lineJoin = "round";
+
+        graphics.strokeStyle = "#262020";
+        graphics.lineWidth = 16;
+        graphics.fillStyle = "#a1a8ae";
+        graphics.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      function resize() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        if (w / h > 1.6) {
+          canvas.style.width = h * 1.6 + "px";
+          canvas.style.height = h + "px";
+        } else {
+          canvas.style.width = w + "px";
+          canvas.style.height = w / 1.6 + "px";
+        }
+        draw();
+      }
+      // Initialization function
+      function init() {
+        canvas = document.getElementById("myCanvas");
+        graphics = canvas.getContext("2d");
+        resize(); // Draw onto the canvas
+      }
+      window.onload = init; // Runs when window is loaded
+      window.addEventListener("resize", resize); // Runs when window is resized, make size good
+    </script>
+  </head>
+  <body>
+    <canvas width="3200" height="2000" id="myCanvas"></canvas>
+  </body>
+</html>
