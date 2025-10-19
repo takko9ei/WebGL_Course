@@ -3,6 +3,7 @@
   <head>
     <title>House Homework</title>
     <meta name="author" content="LI Zhuohang (5125EG13-0)" />
+    <link rel="stylesheet" href="style.css" />
     <script>
       let canvas; // DOM object corresponding to the canvas
       let graphics; // 2D graphics context for drawing to the canvas
@@ -13,19 +14,360 @@
         graphics.lineJoin = "round";
 
         graphics.strokeStyle = "#262020";
-        graphics.lineWidth = 16;
+        graphics.lineWidth = 4;
         graphics.fillStyle = "#a1a8ae";
         graphics.clearRect(0, 0, canvas.width, canvas.height);
+        const radialGradient = graphics.createRadialGradient(
+          600,
+          600,
+          0,
+          600,
+          600,
+          600
+        );
+        radialGradient.addColorStop(0, "#606F36");
+        radialGradient.addColorStop(1, "#374722");
+        graphics.fillStyle = radialGradient;
+        graphics.fillRect(0, 0, 1200, 1200);
+
+        graphics.fillStyle = "#000704";
+        graphics.beginPath();
+        graphics.moveTo(0, 601);
+        graphics.lineTo(143, 441);
+        graphics.lineTo(0, 647);
+        graphics.closePath();
+        graphics.fill();
+        graphics.beginPath();
+        graphics.moveTo(10, 585);
+        graphics.lineTo(54, 387);
+        graphics.lineTo(24, 583);
+        graphics.closePath();
+        graphics.fill();
+        graphics.beginPath();
+        graphics.moveTo(77, 512);
+        graphics.lineTo(87, 427);
+        graphics.lineTo(212, 286);
+        graphics.lineTo(95, 445);
+        graphics.lineTo(105, 500);
+        graphics.closePath();
+        graphics.fill();
+        graphics.beginPath();
+        graphics.moveTo(85, 536);
+        graphics.lineTo(151, 460);
+        graphics.lineTo(303, 373);
+        graphics.lineTo(141, 486);
+        graphics.lineTo(75, 556);
+        graphics.closePath();
+        graphics.fill();
+        graphics.beginPath();
+        graphics.moveTo(50, 552);
+        graphics.lineTo(151, 474);
+        graphics.lineTo(46, 581);
+        graphics.closePath();
+        graphics.fill();
+        graphics.beginPath();
+        graphics.moveTo(93, 514);
+        graphics.lineTo(254, 482);
+        graphics.lineTo(42, 573);
+        graphics.closePath();
+        graphics.fill();
+
+        graphics.fillStyle = "#000704";
+        graphics.beginPath();
+        graphics.moveTo(59, 552);
+        graphics.lineTo(198, 530);
+        graphics.lineTo(67, 558);
+        graphics.closePath();
+        graphics.fill();
+
+        graphics.fillStyle = "#000704";
+        graphics.beginPath();
+        graphics.moveTo(16, 613);
+        graphics.lineTo(121, 647);
+        graphics.lineTo(8, 631);
+        graphics.closePath();
+        graphics.fill();
+
+        graphics.lineTo(18, 569);
+        graphics.lineTo(30, 458);
+        graphics.lineTo(22, 573);
+        graphics.closePath();
+        graphics.fill();
+
+        graphics.fillStyle = "#000704";
+        graphics.beginPath();
+        graphics.moveTo(34, 462);
+        graphics.lineTo(117, 308);
+        graphics.lineTo(40, 476);
+        graphics.closePath();
+        graphics.fill();
+
+        graphics.fillStyle = "#000704";
+        graphics.beginPath();
+        graphics.moveTo(34, 452);
+        graphics.lineTo(34, 298);
+        graphics.lineTo(40, 464);
+        graphics.closePath();
+        graphics.fill();
+
+        graphics.fillStyle = "#000704";
+        graphics.beginPath();
+        graphics.moveTo(141, 445);
+        graphics.lineTo(220, 334);
+        graphics.lineTo(79, 540);
+        graphics.closePath();
+        graphics.fill();
+
+        graphics.beginPath();
+        graphics.moveTo(0, 748);
+        graphics.lineTo(54, 696);
+        graphics.lineTo(0, 764);
+        graphics.closePath();
+        graphics.fill();
+
+        graphics.fillStyle = "#000704";
+        graphics.beginPath();
+        graphics.moveTo(50, 688);
+        graphics.lineTo(69, 607);
+        graphics.lineTo(55, 694);
+        graphics.closePath();
+        graphics.fill();
+
+        graphics.fillStyle = "#000704";
+        graphics.beginPath();
+        graphics.moveTo(50, 696);
+        graphics.lineTo(232, 647);
+        graphics.lineTo(38, 714);
+        graphics.closePath();
+        graphics.fill();
+
+        graphics.fillStyle = "#000704";
+        graphics.beginPath();
+        graphics.moveTo(55, 653);
+        graphics.lineTo(161, 587);
+        graphics.lineTo(54, 676);
+        graphics.closePath();
+        graphics.fill();
+
+        graphics.fillStyle = "#858c59";
+        graphics.beginPath();
+        graphics.moveTo(107, 1114);
+        graphics.lineTo(184, 734);
+        graphics.lineTo(224, 712);
+        graphics.lineTo(230, 655);
+        graphics.lineTo(824, 338);
+        graphics.lineTo(1197, 894);
+        graphics.lineTo(1195, 1110);
+        graphics.lineTo(107, 1114);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+        graphics.fillStyle = "#5b633a";
+        graphics.beginPath();
+        graphics.moveTo(113, 665);
+        graphics.lineTo(119, 690);
+        graphics.lineTo(137, 698);
+        graphics.lineTo(145, 688);
+        graphics.lineTo(224, 704);
+        graphics.lineTo(230, 653);
+        graphics.lineTo(856, 326);
+        graphics.lineTo(1197, 821);
+        graphics.lineTo(1197, 805);
+        graphics.lineTo(862, 298);
+        graphics.lineTo(161, 649);
+        graphics.lineTo(149, 672);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+        graphics.fillStyle = "#5c643d";
+        graphics.beginPath();
+        graphics.moveTo(828, 341);
+        graphics.lineTo(1197, 898);
+        graphics.lineTo(1197, 823);
+        graphics.lineTo(858, 330);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+        graphics.fillStyle = "#1a2c12";
+        graphics.beginPath();
+        graphics.moveTo(125, 668);
+        graphics.lineTo(147, 676);
+        graphics.lineTo(151, 653);
+        graphics.lineTo(858, 300);
+        graphics.lineTo(1197, 803);
+        graphics.lineTo(1197, 787);
+        graphics.lineTo(870, 288);
+        graphics.lineTo(852, 286);
+        graphics.lineTo(137, 637);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+        graphics.fillStyle = "#423c1a";
+        graphics.beginPath();
+        graphics.moveTo(0, 758);
+        graphics.lineTo(109, 663);
+        graphics.lineTo(119, 688);
+        graphics.lineTo(139, 698);
+        graphics.lineTo(151, 680);
+        graphics.lineTo(220, 704);
+        graphics.lineTo(182, 732);
+        graphics.lineTo(125, 776);
+        graphics.lineTo(99, 760);
+        graphics.lineTo(97, 730);
+        graphics.lineTo(81, 724);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+        graphics.fillStyle = "#363113";
+        graphics.beginPath();
+        graphics.moveTo(-2, 875);
+        graphics.lineTo(190, 728);
+        graphics.lineTo(113, 1112);
+        graphics.lineTo(-2, 1114);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+        graphics.fillStyle = "#513716";
+        graphics.beginPath();
+        graphics.moveTo(-2, 791);
+        graphics.lineTo(81, 724);
+        graphics.lineTo(75, 768);
+        graphics.lineTo(101, 795);
+        graphics.lineTo(0, 873);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+        graphics.fillStyle = "#362d10";
+        graphics.beginPath();
+        graphics.moveTo(-2, 762);
+        graphics.lineTo(111, 659);
+        graphics.lineTo(121, 690);
+        graphics.lineTo(137, 694);
+        graphics.lineTo(105, 732);
+        graphics.lineTo(73, 730);
+        graphics.lineTo(-2, 789);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+        graphics.fillStyle = "#373212";
+        graphics.beginPath();
+        graphics.moveTo(73, 734);
+        graphics.lineTo(73, 770);
+        graphics.lineTo(133, 825);
+        graphics.lineTo(145, 825);
+        graphics.lineTo(147, 809);
+        graphics.lineTo(89, 762);
+        graphics.lineTo(89, 724);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+        graphics.fillStyle = "#4c5332";
+        graphics.beginPath();
+        graphics.moveTo(85, 728);
+        graphics.lineTo(97, 734);
+        graphics.lineTo(97, 758);
+        graphics.lineTo(151, 795);
+        graphics.lineTo(161, 823);
+        graphics.lineTo(97, 1114);
+        graphics.lineTo(79, 1112);
+        graphics.lineTo(141, 817);
+        graphics.lineTo(83, 768);
+        graphics.lineTo(85, 730);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+        graphics.fillStyle = "#423c1a";
+        graphics.beginPath();
+        graphics.moveTo(149, 682);
+        graphics.lineTo(224, 708);
+        graphics.lineTo(186, 740);
+        graphics.lineTo(119, 714);
+        graphics.closePath();
+        graphics.fill();
+        graphics.fillStyle = "#d99228";
+        graphics.beginPath();
+        graphics.moveTo(28, 1083);
+        graphics.lineTo(55, 1069);
+        graphics.lineTo(87, 914);
+        graphics.lineTo(117, 902);
+        graphics.lineTo(121, 871);
+        graphics.lineTo(59, 912);
+        graphics.lineTo(26, 1081);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+        graphics.fillStyle = "#f2ed5b";
+        graphics.beginPath();
+        graphics.moveTo(54, 1065);
+        graphics.lineTo(87, 1051);
+        graphics.lineTo(117, 898);
+        graphics.lineTo(85, 918);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+        graphics.fillStyle = "#251f07";
+        graphics.beginPath();
+        graphics.moveTo(12, 1097);
+        graphics.lineTo(55, 898);
+        graphics.lineTo(123, 853);
+        graphics.lineTo(121, 871);
+        graphics.lineTo(63, 912);
+        graphics.lineTo(26, 1083);
+        graphics.lineTo(87, 1049);
+        graphics.lineTo(91, 1053);
+        graphics.lineTo(12, 1099);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+        graphics.fillStyle = "#242a0e";
+        graphics.beginPath();
+        graphics.moveTo(805, 441);
+        graphics.lineTo(852, 456);
+        graphics.lineTo(854, 415);
+        graphics.lineTo(805, 385);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+        graphics.fillStyle = "#040e06";
+        graphics.beginPath();
+        graphics.moveTo(119, 668);
+        graphics.lineTo(147, 684);
+        graphics.lineTo(163, 649);
+        graphics.lineTo(147, 653);
+        graphics.lineTo(139, 641);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+        graphics.fillStyle = "#737448";
+        graphics.beginPath();
+        graphics.moveTo(775, 1055);
+        graphics.lineTo(939, 1104);
+        graphics.lineTo(914, 748);
+        graphics.lineTo(769, 688);
+        graphics.lineTo(765, 690);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
+        graphics.fillStyle = "#22260b";
+        graphics.beginPath();
+        graphics.moveTo(428, 1114);
+        graphics.lineTo(539, 1069);
+        graphics.lineTo(543, 1114);
+        graphics.closePath();
+        graphics.fill();
+        graphics.stroke();
       }
       function resize() {
+        // canvas.style.width = window.innerWidth + "px";
+        // canvas.style.height = window.innerHeight + "px";
         const w = window.innerWidth;
         const h = window.innerHeight;
         if (w / h > 1.6) {
-          canvas.style.width = h * 1.6 + "px";
+          canvas.style.width = h + "px";
           canvas.style.height = h + "px";
         } else {
           canvas.style.width = w + "px";
-          canvas.style.height = w / 1.6 + "px";
+          canvas.style.height = w + "px";
         }
         draw();
       }
@@ -40,6 +382,6 @@
     </script>
   </head>
   <body>
-    <canvas width="3200" height="2000" id="myCanvas"></canvas>
+    <canvas width="1200" height="1200" id="myCanvas"></canvas>
   </body>
 </html>
