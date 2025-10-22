@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>WebGL2 VAO + VBO 彩色三角形 最小示例</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        background: #111;
+      }
+      .note {
+        position: fixed;
+        left: 8px;
+        top: 8px;
+        color: #ddd;
+        font-family: ui-sans-serif, system-ui;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="gl" width="800" height="600"></canvas>
+
+    <script>
+      // 最小化但清晰的 WebGL2 示例：使用 VAO/VBO 绘制一个彩色三角形
+      const canvas = document.getElementById("gl");
+      const gl = canvas.getContext("webgl2");
+      if (!gl) {
+        document.body.innerHTML =
+          '<p style="color:#f44;font-family:monospace">你的浏览器不支持 WebGL2。</p>';
+        throw new Error("WebGL2 not supported");
+      }
+
+      // 顶点着色器：位置 (vec2) 和 颜色 (vec3) 作为属性
+      const vsSource = `#version 300 es
+  in vec2 a_position;
+  in vec3 a_color;
+  out vec3 v_color;
+  void main(){
+    v_color = a_color;
+    gl_Position = vec4(a_position, 0.0, 1.0);
+  }`;
+
+      // 片段着色器：接收颜色并输出
+      const fsSource = `#version 300 es
+  precision mediump float;
+  in vec3 v_color;
+  out vec4 outColor;
+  void main(){
+    outColor = vec4(v_color, 1.0);
+  }`;
+
+      function compileShader(type, src) {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+          const log = gl.getShaderInfoLog(s);
+          gl.deleteShader(s);
+          throw new Error("Shader compile error: " + log);
+        }
+        return s;
+      }
+
+      function createProgram(vsSrc, fsSrc) {
+        const vs = compileShader(gl.VERTEX_SHADER, vsSrc);
+        const fs = compileShader(gl.FRAGMENT_SHADER, fsSrc);
+        const prog = gl.createProgram();
+        gl.attachShader(prog, vs);
+        gl.attachShader(prog, fs);
+        gl.linkProgram(prog);
+        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+          const log = gl.getProgramInfoLog(prog);
+          gl.deleteProgram(prog);
+          throw new Error("Program link error: " + log);
+        }
+        // shaders can be deleted after linking
+        gl.deleteShader(vs);
+        gl.deleteShader(fs);
+        return prog;
+      }
+
+      const program = createProgram(vsSource, fsSource);
+
+      // 三个顶点：每个顶点包含 2 个坐标分量和 3 个颜色分量（interleaved）
+      // 顺序: x, y, r, g, b
+      const vertices = new Float32Array([
+        0.0,
+        0.6,
+        1.0,
+        0.2,
+        0.2, // 顶部，偏红
+        -0.6,
+        -0.6,
+        0.2,
+        1.0,
+        0.2, // 左，下偏绿
+        0.6,
+        -0.6,
+        0.2,
+        0.2,
+        1.0, // 右，下偏蓝
+      ]);
+
+      // 创建并绑定 VAO（Vertex Array Object）
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+
+      // 创建 VBO（Vertex Buffer Object）并上传数据
+      const vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+      // 获取 attribute 位置并启用、描述它们（注意 stride 和 offset）
+      const posLoc = gl.getAttribLocation(program, "a_position");
+      const colLoc = gl.getAttribLocation(program, "a_color");
+
+      const FLOAT_SIZE = 4; // 字节
+      const stride = (2 + 3) * FLOAT_SIZE; // 每个顶点字节数
+      // a_position: 2 个分量，从 offset 0
+      gl.enableVertexAttribArray(posLoc);
+      gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, stride, 0);
+
+      // a_color: 3 个分量，从 offset = 2 * float
+      gl.enableVertexAttribArray(colLoc);
+      gl.vertexAttribPointer(
+        colLoc,
+        3,
+        gl.FLOAT,
+        false,
+        stride,
+        2 * FLOAT_SIZE
+      );
+
+      // VAO 配置完成后解绑（良好实践）
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+      // 渲染设置
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+      gl.clearColor(0.06, 0.06, 0.06, 1.0);
+
+      function render() {
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(program);
+        gl.bindVertexArray(vao);
+        // 绘制三角形
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.bindVertexArray(null);
+      }
+
+      // 支持窗口尺寸变化
+      function resizeToDisplaySize(canvas) {
+        const dpr = window.devicePixelRatio || 1;
+        const width = Math.floor(canvas.clientWidth * dpr);
+        const height = Math.floor(canvas.clientHeight * dpr);
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+          gl.viewport(0, 0, width, height);
+          return true;
+        }
+        return false;
+      }
+
+      function loop() {
+        resizeToDisplaySize(canvas);
+        render();
+        requestAnimationFrame(loop);
+      }
+      requestAnimationFrame(loop);
+    </script>
+  </body>
+</html>

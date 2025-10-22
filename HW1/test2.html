@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>GL 最小示例: VAO (WebGL 2.0) - 已修复</title>
+    <style>
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background: #333;
+      }
+      canvas {
+        border: 1px solid white;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="glCanvas" width="600" height="400"></canvas>
+
+    <script id="vertex-shader" type="x-shader/x-vertex">
+      #version 300 es
+
+      in vec3 a_position;
+      in vec3 a_color;
+      out vec3 v_color;
+
+      void main() {
+          gl_Position = vec4(a_position, 1.0);
+          v_color = a_color;
+      }
+    </script>
+
+    <script id="fragment-shader" type="x-shader/x-fragment">
+      #version 300 es
+
+      precision mediump float;
+
+      in vec3 v_color;
+      out vec4 fragColor;
+
+      void main() {
+          fragColor = vec4(v_color, 1.0);
+      }
+    </script>
+
+    <script>
+      // -- A. 初始化 --
+      const canvas = document.getElementById("glCanvas");
+      const gl = canvas.getContext("webgl2");
+      if (!gl) {
+        alert("您的浏览器不支持 WebGL 2.0。");
+      }
+
+      // 2. 从 <script> 标签获取着色器源码
+      // ---  这是关键的修复 ---
+      // 使用 .trim() 移除字符串开头和结尾的空白（换行符、空格）
+      // 这确保 #version 300 es 绝对是字符串的第一行
+      const vsSource = document.getElementById("vertex-shader").text.trim();
+      const fsSource = document.getElementById("fragment-shader").text.trim();
+      // ---  修复结束 ---
+
+      // 3. 编译和链接着色器
+      const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+
+      // 4. 告诉 WebGL 使用此程序
+      gl.useProgram(shaderProgram);
+
+      // -- B. 准备数据 (VBO) --
+      const vertexData = [
+        0.0,
+        0.5,
+        0.0,
+        1.0,
+        0.0,
+        0.0, // Top-Red
+        -0.5,
+        -0.5,
+        0.0,
+        0.0,
+        1.0,
+        0.0, // Left-Green
+        0.5,
+        -0.5,
+        0.0,
+        0.0,
+        0.0,
+        1.0, // Right-Blue
+      ];
+      const vertexCount = 3;
+      const bytesPerFloat = 4;
+      const stride = (3 + 3) * bytesPerFloat;
+
+      // 1. 创建 VBO
+      const vbo = gl.createBuffer();
+      // 2. 绑定 VBO
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      // 3. 发送数据
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array(vertexData),
+        gl.STATIC_DRAW
+      );
+
+      // -- C. 设置 VAO (Vertex Array Object) --
+
+      // 1. 创建 VAO
+      const vao = gl.createVertexArray();
+
+      // 2. 绑定 VAO (开始 "录制" 状态)
+      gl.bindVertexArray(vao);
+
+      // 3. 告诉 VAO 它应该从哪个 VBO 读取数据
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+
+      // 4. 设置 'a_position' 属性
+      const a_position_loc = gl.getAttribLocation(shaderProgram, "a_position");
+      gl.vertexAttribPointer(a_position_loc, 3, gl.FLOAT, false, stride, 0);
+      gl.enableVertexAttribArray(a_position_loc); // VAO 记住: 启用
+
+      // 5. 设置 'a_color' 属性
+      const a_color_loc = gl.getAttribLocation(shaderProgram, "a_color");
+      gl.vertexAttribPointer(
+        a_color_loc,
+        3,
+        gl.FLOAT,
+        false,
+        stride,
+        3 * bytesPerFloat // Offset
+      );
+      gl.enableVertexAttribArray(a_color_loc); // VAO 记住: 启用
+
+      // 6. 解绑 VAO (完成 "录制")
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+      // -- D. 绘制 --
+
+      gl.clearColor(0.0, 0.0, 0.0, 1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      // 1. 绑定 VAO (恢复所有 VBO 和属性设置)
+      gl.bindVertexArray(vao);
+
+      // 2. 绘制!
+      gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
+
+      // 3. 解绑 VAO
+      gl.bindVertexArray(null);
+
+      // --- 辅助函数 (没有变化) ---
+      function initShaderProgram(gl, vsSource, fsSource) {
+        const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
+        const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+        // 检查着色器是否编译成功
+        if (!vertexShader || !fragmentShader) {
+          return null; // loadShader 内部已经 alert 过了
+        }
+        const shaderProgram = gl.createProgram();
+        gl.attachShader(shaderProgram, vertexShader);
+        gl.attachShader(shaderProgram, fragmentShader);
+        gl.linkProgram(shaderProgram);
+        if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+          alert(
+            "Unable to initialize the shader program: " +
+              gl.getProgramInfoLog(shaderProgram)
+          );
+          return null;
+        }
+        return shaderProgram;
+      }
+
+      function loadShader(gl, type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          // 将详细的编译错误打印到控制台，这比 alert 更好
+          console.error(
+            "An error occurred compiling the shaders: " +
+              gl.getShaderInfoLog(shader)
+          );
+          alert(
+            "An error occurred compiling the shaders. Check console for details."
+          );
+          gl.deleteShader(shader);
+          return null;
+        }
+        return shader;
+      }
+    </script>
+  </body>
+</html>
