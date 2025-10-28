@@ -24,6 +24,8 @@
       }
     </script>
     <script type="text/javascript">
+      "use strict";
+
       function createProgram(gl, vertexSrc, fragmentSrc) {
         let vshd = gl.createShader(gl.VERTEX_SHADER);
         gl.shaderSource(vshd, vertexSrc);
@@ -84,17 +86,11 @@
         gl.useProgram(program);
 
         // Get and set vertex attribute
-        //program.vertexPosAttrib = gl.getAttribLocation(program, "pos");
-        console.log("program.vertexPosAttrib 的值是:", program.vertexPosAttrib);
-        gl.enableVertexAttribArray(program.vertexPosAttrib);
-        gl.vertexAttribPointer(
-          program.vertexPosAttrib,
-          2,
-          gl.FLOAT,
-          false,
-          0,
-          0
-        );
+        let vertexPosAttrib = gl.getAttribLocation(program, "pos");
+        //vertexPosAttrib = 0;
+        //console.log("vertexPosAttrib 的值是:", vertexPosAttrib);
+        gl.enableVertexAttribArray(vertexPosAttrib);
+        gl.vertexAttribPointer(vertexPosAttrib, 2, gl.FLOAT, false, 0, 0);
 
         // Draw triangles
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
