@@ -1,0 +1,91 @@
+<html>
+  <head>
+    <title>Minimal WebGL Example</title>
+    <!-- NOTICE: I manually implemented the skeleton and style. This is modified from the original given skeleton file. -->
+    <style>
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background: #333;
+      }
+      canvas {
+        border: 1px solid white;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="glCanvas" style="width: 400px; height: 400px" />
+    <!-- type="notjs" makes it not get identified as javascript. -->
+    <script id="vertex-shader" type="notjs">
+            #version 300 es
+      in vec4 pos;
+      out vec2 coord;
+      void main() {
+         coord = pos.xy*0.5+0.5;
+         gl_Position = pos;
+      }
+    </script>
+    <script id="fragment-shader" type="notjs">
+            #version 300 es
+      precision mediump float;
+      in vec2 coord;
+      out vec4 color_out;
+      void main() {
+         color_out = vec4(coord.x, 0.5, coord.y, 1.0);
+      }
+    </script>
+    <script>
+      const canvas = document.getElementById("glCanvas");
+      const gl = canvas.getContext("webgl2");
+      if (!gl) throw new Error("WebGL unsupported!");
+
+      const vsSource = document.getElementById("vertex-shader").text.trim();
+      const fsSource = document.getElementById("fragment-shader").text.trim();
+
+      const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+
+      gl.useProgram(shaderProgram);
+
+      //helper
+      function initShaderProgram(gl, vsSource, fsSource) {
+        const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
+        const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+        if (!vertexShader || !fragmentShader) return null;
+        const shaderProgram = gl.createProgram(); //distinguish with createshader
+        gl.attachShader(shaderProgram, vertexShader);
+        gl.attachShader(shaderProgram, fragmentShader);
+        //two colomns above can be reversed
+        gl.linkProgram(shaderProgram);
+        if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+          alert(
+            "Unable to initialize the shader program: " +
+              gl.getProgramInfoLog(shaderProgram)
+          );
+          return null;
+        }
+        return shaderProgram;
+      }
+      function loadShader(gl, type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+
+        //if compile fail
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          console.error(
+            "An error occurred compiling the shaders: " +
+              gl.getShaderInfoLog(shader)
+          );
+          alert(
+            "An error occurred compiling the shaders. Check console for details."
+          );
+          gl.deleteShader(shader);
+          return null;
+        }
+        return shader;
+      }
+    </script>
+  </body>
+</html>
