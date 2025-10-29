@@ -24,8 +24,6 @@
       }
     </script>
     <script type="text/javascript">
-      "use strict";
-
       function createProgram(gl, vertexSrc, fragmentSrc) {
         let vshd = gl.createShader(gl.VERTEX_SHADER);
         gl.shaderSource(vshd, vertexSrc);
@@ -62,12 +60,12 @@
         gl.clear(gl.COLOR_BUFFER_BIT);
 
         /*
-       2___3
-       |\  |
-       | \ |
-       |__\|
-       0   1
-      */
+    2___3
+    |\  |
+    | \ |
+    |__\|
+    0   1
+   */
         var vertexPosBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, vertexPosBuffer);
         var vertices = [-1, -1, 1, -1, -1, 1, 1, 1];
@@ -76,8 +74,8 @@
           new Float32Array(vertices),
           gl.STATIC_DRAW
         );
-        //vertexPosBuffer.itemSize = 2;
-        //vertexPosBuffer.numItems = 4;
+        vertexPosBuffer.itemSize = 2;
+        vertexPosBuffer.numItems = 4;
 
         // Create our shader program
         var vs = document.querySelector("#vertex-shader").text.trim();
@@ -86,11 +84,16 @@
         gl.useProgram(program);
 
         // Get and set vertex attribute
-        let vertexPosAttrib = gl.getAttribLocation(program, "pos");
-        //vertexPosAttrib = 0;
-        //console.log("vertexPosAttrib 的值是:", vertexPosAttrib);
-        gl.enableVertexAttribArray(vertexPosAttrib);
-        gl.vertexAttribPointer(vertexPosAttrib, 2, gl.FLOAT, false, 0, 0);
+        program.vertexPosAttrib = gl.getAttribLocation(program, "pos");
+        gl.enableVertexAttribArray(program.vertexPosAttrib);
+        gl.vertexAttribPointer(
+          program.vertexPosAttrib,
+          2,
+          gl.FLOAT,
+          false,
+          0,
+          0
+        );
 
         // Draw triangles
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
