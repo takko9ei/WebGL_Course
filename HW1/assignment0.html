@@ -38,34 +38,46 @@
       }
     </script>
     <script>
+      //#region variables
+      const vertices = [-1, -1, 1, -1, -1, 1, 1, 1];
+      //#endregion
+
+      //#region initialization
       const canvas = document.getElementById("glCanvas");
       const gl = canvas.getContext("webgl2");
       if (!gl) throw new Error("WebGL unsupported!");
+      //#endregion
 
+      //#region shader setup
       const vsSource = document.getElementById("vertex-shader").text.trim();
       const fsSource = document.getElementById("fragment-shader").text.trim();
-
       const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
-
       gl.useProgram(shaderProgram);
+      //#endregion
 
+      //#region bind
       let vbo = gl.createBuffer();
+      let vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
       gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-      const vertices = [-1, -1, 1, -1, -1, 1, 1, 1];
       gl.bufferData(
         gl.ARRAY_BUFFER,
         new Float32Array(vertices),
         gl.STATIC_DRAW
       );
-
       let vertexPosAttrib = gl.getAttribLocation(shaderProgram, "pos"); //返回“pos”入口的位置
       gl.enableVertexAttribArray(vertexPosAttrib); //“启用入口”
       gl.vertexAttribPointer(vertexPosAttrib, 2, gl.FLOAT, false, 0, 0); //index size type normalized stride offset
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      //#endregion
 
-      // Draw triangles
+      //#region draw
+      gl.bindVertexArray(vao);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      //#endregion
 
-      //helper
+      //#region shader helper functions
       function initShaderProgram(gl, vsSource, fsSource) {
         const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
         const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
@@ -104,6 +116,7 @@
         }
         return shader;
       }
+      //#endregion
     </script>
   </body>
 </html>
