@@ -1,0 +1,144 @@
+<html>
+  <head>
+    <title>Minimal WebGL Example</title>
+    <!--  NOTICE: This is a minimum skeleton, rendering a square. 
+          Compared with example given in class, this skeleton has clearer structure, and described how to use vbo, vao properly. 
+          Also, this program runs under strict mode. -->
+    <style>
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background: #333;
+      }
+      canvas {
+        border: 1px solid white;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="glCanvas" style="width: 400px; height: 400px" />
+    <!-- type="notjs" makes it not get identified as javascript. -->
+    <script id="vertex-shader" type="notjs">
+      #version 300 es
+      in vec4 pos;
+      out vec2 coord;
+      void main() {
+        coord = pos.xy*0.5+0.5;
+        gl_Position = pos;
+      }
+    </script>
+    <script id="fragment-shader" type="notjs">
+          #version 300 es
+      precision mediump float;
+
+      in vec2 coord;
+      out vec4 color_out;
+
+      void main() {
+        // Define colors
+        vec4 rect_color = vec4(1.0, 1.0, 1.0, 1.0); // White
+        vec4 bg_color = vec4(0.0, 0.0, 0.0, 1.0);   // Black
+
+        // Check X boundary
+        // step(0.25, coord.x) is 1.0 if coord.x >= 0.25
+        // step(0.75, coord.x) is 1.0 if coord.x >= 0.75
+        // (1.0 - step(0.75, coord.x)) is 1.0 if coord.x < 0.75
+        float in_x = step(0.25, coord.x) * (1.0 - step(0.75, coord.x));
+
+        // Check Y boundary
+        float in_y = step(0.25, coord.y) * (1.0 - step(0.75, coord.y));
+
+        // in_rect will be 1.0 if (in_x AND in_y are 1.0), otherwise 0.0
+        float in_rect = in_x * in_y;
+
+        // mix(a, b, t) = a*(1.0-t) + b*t
+        // If in_rect is 0.0, color is bg_color
+        // If in_rect is 1.0, color is rect_color
+        color_out = mix(bg_color, rect_color, in_rect);
+      }
+    </script>
+    <script>
+      "use strict";
+      //#region variables
+      const vertices = [-1, -1, 1, -1, -1, 1, 1, 1];
+      //#endregion
+
+      //#region initialization
+      const canvas = document.getElementById("glCanvas");
+      const gl = canvas.getContext("webgl2");
+      if (!gl) throw new Error("WebGL unsupported!");
+      //#endregion
+
+      //#region shader setup
+      const vsSource = document.getElementById("vertex-shader").text.trim();
+      const fsSource = document.getElementById("fragment-shader").text.trim();
+      const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+      gl.useProgram(shaderProgram);
+      //#endregion
+
+      //#region bind
+      let vbo = gl.createBuffer();
+      let vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array(vertices),
+        gl.STATIC_DRAW
+      );
+      let vertexPosAttrib = gl.getAttribLocation(shaderProgram, "pos"); //返回“pos”入口的位置
+      gl.enableVertexAttribArray(vertexPosAttrib); //“启用入口”
+      gl.vertexAttribPointer(vertexPosAttrib, 2, gl.FLOAT, false, 0, 0); //index size type normalized stride offset
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      //#endregion
+
+      //#region draw
+      gl.bindVertexArray(vao);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      //#endregion
+
+      //#region shader helper functions
+      function initShaderProgram(gl, vsSource, fsSource) {
+        const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
+        const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+        if (!vertexShader || !fragmentShader) return null;
+        const shaderProgram = gl.createProgram(); //distinguish with createshader
+        gl.attachShader(shaderProgram, vertexShader);
+        gl.attachShader(shaderProgram, fragmentShader);
+        //two colomns above can be reversed
+        gl.linkProgram(shaderProgram);
+        if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+          alert(
+            "Unable to initialize the shader program: " +
+              gl.getProgramInfoLog(shaderProgram)
+          );
+          return null;
+        }
+        return shaderProgram;
+      }
+      function loadShader(gl, type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        //if compile fail
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          console.error(
+            "An error occurred compiling the shaders: " +
+              gl.getShaderInfoLog(shader)
+          );
+          alert(
+            "An error occurred compiling the shaders. Check console for details."
+          );
+          gl.deleteShader(shader);
+          return null;
+        }
+        return shader;
+      }
+      //#endregion
+    </script>
+  </body>
+</html>
