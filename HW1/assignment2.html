@@ -26,7 +26,7 @@
       in vec4 pos;
       out vec2 coord;
       void main() {
-        coord = pos.xy*0.5+0.5;
+        coord = pos.xy;
         gl_Position = pos;
       }
     </script>
@@ -35,8 +35,30 @@
       precision mediump float;
       in vec2 coord;
       out vec4 color_out;
+      float sdBox(in vec2 p, in vec2 b)
+      {
+          vec2 d = abs(p)-b;
+          return length(max(d,0.0)) + min(max(d.x,d.y),0.0);
+      }
+      float sdTrapezoid( in vec2 p, in float r1, float r2, float he )
+      {
+          vec2 k1 = vec2(r2,he);
+          vec2 k2 = vec2(r2-r1,2.0*he);
+          p.x = abs(p.x);
+          vec2 ca = vec2(p.x-min(p.x,(p.y<0.0)?r1:r2), abs(p.y)-he);
+          vec2 cb = p - k1 + k2*clamp( dot(k1-p,k2)/dot(k2, k2), 0.0, 1.0 );
+          float s = (cb.x<0.0 && ca.y<0.0) ? -1.0 : 1.0;
+          return s*sqrt( min(dot(ca,ca),dot(cb,cb)) );
+      }
       void main() {
-        color_out = vec4(coord.x, 0.5, coord.y, 1.0);
+        vec3 color_dark_blue = vec3(0.1, 0.3, 0.7);
+        float d_contour = sdTrapezoid(coord,0.5,0.1,0.7);
+        float d_lowerbool = sdTrapezoid(0.6*vec2(coord.x,coord.y+1.4),0.5,0.1,0.7);
+        float d_upperbool = sdTrapezoid(vec2(coord.x,coord.y-0.1),0.125,0.025,0.175);
+        float res0 = max(d_contour, -d_lowerbool);
+        float res1 = max(res0, -d_upperbool);
+        float d1 = 1.0 - smoothstep(-0.01, 0.01, res1);
+        color_out = vec4(d1*color_dark_blue, 1.0);
       }
     </script>
     <script>
