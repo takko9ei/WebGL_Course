@@ -19,14 +19,14 @@
     </style>
   </head>
   <body>
-    <canvas id="glCanvas" style="width: 400px; height: 400px" />
+    <canvas id="glCanvas" style="width: 600px; height: 600px" />
     <!-- type="notjs" makes it not get identified as javascript. -->
     <script id="vertex-shader" type="notjs">
       #version 300 es
       in vec4 pos;
       out vec2 coord;
       void main() {
-        coord = pos.xy*0.5+0.5;
+        coord = pos.xy;
         gl_Position = pos;
       }
     </script>
@@ -37,27 +37,28 @@
       in vec2 coord;
       out vec4 color_out;
 
+      // --- 新增 uniform 变量 ---
+      uniform float u_time; // 从 JS 传入的时间，用于动画
+
+      //sdf
+      float sdBox(in vec2 p, in vec2 b)
+      {
+          vec2 d = abs(p)-b;
+          return length(max(d,0.0)) + min(max(d.x,d.y),0.0);
+      }
+
       void main() {
-        // Define colors
-        vec4 rect_color = vec4(1.0, 1.0, 1.0, 1.0); // White
-        vec4 bg_color = vec4(0.0, 0.0, 0.0, 1.0);   // Black
 
-        // Check X boundary
-        // step(0.25, coord.x) is 1.0 if coord.x >= 0.25
-        // step(0.75, coord.x) is 1.0 if coord.x >= 0.75
-        // (1.0 - step(0.75, coord.x)) is 1.0 if coord.x < 0.75
-        float in_x = step(0.25, coord.x) * (1.0 - step(0.75, coord.x));
+        vec2 half_size = vec2(1, 0.5); // 宽为画布宽度，高为一半
 
-        // Check Y boundary
-        float in_y = step(0.25, coord.y) * (1.0 - step(0.75, coord.y));
+        // --- 颜色定义 (修改) ---
+        vec3 color_dark_blue = vec3(0.1, 0.3, 0.7);  // 深蓝
 
-        // in_rect will be 1.0 if (in_x AND in_y are 1.0), otherwise 0.0
-        float in_rect = in_x * in_y;
+        // --- 绘制 (修改) ---
+        float d = sdBox(coord, half_size);
+        float d1 = 1.0 - step(0.0, d);
 
-        // mix(a, b, t) = a*(1.0-t) + b*t
-        // If in_rect is 0.0, color is bg_color
-        // If in_rect is 1.0, color is rect_color
-        color_out = mix(bg_color, rect_color, in_rect);
+        color_out = vec4(d1*color_dark_blue, 1.0);
       }
     </script>
     <script>
@@ -77,6 +78,8 @@
       const fsSource = document.getElementById("fragment-shader").text.trim();
       const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
       gl.useProgram(shaderProgram);
+      // --- 新增: 获取 uniform 变量的位置 ---
+      const uTimeLocation = gl.getUniformLocation(shaderProgram, "u_time");
       //#endregion
 
       //#region bind
@@ -96,12 +99,23 @@
       gl.bindBuffer(gl.ARRAY_BUFFER, null);
       //#endregion
 
-      //#region draw
-      gl.bindVertexArray(vao);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      requestAnimationFrame(render); // 启动动画循环
       //#endregion
 
       //#region shader helper functions
+      function render(time) {
+        time *= 0.001; // 转换为秒
+
+        gl.clearColor(0.0, 0.0, 0.0, 1.0); // 设置清屏颜色为黑色
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        gl.useProgram(shaderProgram); // 激活着色器程序
+        gl.uniform1f(uTimeLocation, time); // 更新时间 uniform
+        gl.bindVertexArray(vao); // 绑定 VAO
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // 绘制
+        requestAnimationFrame(render); // 请求下一帧
+      }
+
       function initShaderProgram(gl, vsSource, fsSource) {
         const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
         const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
