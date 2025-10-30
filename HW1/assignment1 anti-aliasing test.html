@@ -1,0 +1,190 @@
+<html>
+  <head>
+    <title>Minimal WebGL Example</title>
+    <!--  NOTICE: This is a minimum skeleton, rendering a square. 
+          Compared with example given in class, this skeleton has clearer structure, and described how to use vbo, vao properly. 
+          Also, this program runs under strict mode. -->
+    <style>
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background: #333;
+      }
+      canvas {
+        border: 1px solid white;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="glCanvas" style="width: 600px; height: 600px" />
+    <!-- type="notjs" makes it not get identified as javascript. -->
+    <script id="vertex-shader" type="notjs">
+      #version 300 es
+      in vec4 pos;
+      out vec2 coord;
+      void main() {
+        coord = pos.xy;
+        gl_Position = pos;
+      }
+    </script>
+    <script id="fragment-shader" type="notjs">
+          #version 300 es
+      precision mediump float;
+
+      in vec2 coord;
+      out vec4 color_out;
+
+      // --- 新增 uniform 变量 ---
+      uniform float u_time; // 从 JS 传入的时间，用于动画
+      uniform vec2 u_jitter; // TAA 抖动向量
+
+      //sdf
+      float sdBox(in vec2 p, in vec2 b)
+      {
+          vec2 d = abs(p)-b;
+          return length(max(d,0.0)) + min(max(d.x,d.y),0.0);
+      }
+
+      void main() {
+
+        vec2 half_size = vec2(1, 0.5); // 宽为画布宽度，高为一半
+
+        // --- 颜色定义 (修改) ---
+        vec3 color_dark_blue = vec3(0.1, 0.3, 0.7);  // 深蓝
+
+        // --- 绘制 (修改) ---
+        mat3 move = mat3(1,0,0,0,1,0,0.3*sin(2.0*u_time),0.7*cos(3.0*u_time),1);
+        mat3 rot = mat3(cos(u_time), sin(u_time), 0, -sin(u_time), cos(u_time), 0, 0, 0, 1);
+        // 应用抖动
+        vec3 rotres = rot * move * vec3(coord + u_jitter, 1.0);
+        float d = sdBox(rotres.xy, half_size);
+
+        // 使用 smoothstep 实现抗锯齿边缘
+        float aa = 1.0 - smoothstep(-0.01, 0.01, d);
+        color_out = vec4(aa * color_dark_blue, aa);
+      }
+    </script>
+    <script>
+      "use strict";
+      //#region variables
+      const vertices = [-1, -1, 1, -1, -1, 1, 1, 1];
+      //#endregion
+
+      //#region initialization
+      const canvas = document.getElementById("glCanvas");
+      const gl = canvas.getContext("webgl2");
+      if (!gl) throw new Error("WebGL unsupported!");
+      //#endregion
+
+      //#region shader setup
+      const vsSource = document.getElementById("vertex-shader").text.trim();
+      const fsSource = document.getElementById("fragment-shader").text.trim();
+      const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+      gl.useProgram(shaderProgram);
+      // --- 新增: 获取 uniform 变量的位置 ---
+      const uTimeLocation = gl.getUniformLocation(shaderProgram, "u_time");
+      const uJitterLocation = gl.getUniformLocation(shaderProgram, "u_jitter");
+      //#endregion
+
+      //#region bind
+      let vbo = gl.createBuffer();
+      let vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array(vertices),
+        gl.STATIC_DRAW
+      );
+      let vertexPosAttrib = gl.getAttribLocation(shaderProgram, "pos"); //返回“pos”入口的位置
+      gl.enableVertexAttribArray(vertexPosAttrib); //“启用入口”
+      gl.vertexAttribPointer(vertexPosAttrib, 2, gl.FLOAT, false, 0, 0); //index size type normalized stride offset
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      //#endregion
+
+      // TAA 设置
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      let frameCount = 0;
+
+      requestAnimationFrame(render); // 启动动画循环
+      //#endregion
+
+      //#region shader helper functions
+      function render(time) {
+        time *= 0.001; // 转换为秒
+        frameCount++;
+
+        // 绘制一个半透明的黑色背景来混合前一帧，而不是完全清除
+        gl.clearColor(0.0, 0.0, 0.0, 0.1); // alpha 0.1 控制历史帧的保留程度
+        gl.clear(gl.COLOR_BUFFER_BIT); // clear会使用上面的clearColor
+
+        gl.useProgram(shaderProgram); // 激活着色器程序
+        gl.uniform1f(uTimeLocation, time); // 更新时间 uniform
+
+        // 计算并传递 Halton 序列抖动值
+        const jitterX = (halton(frameCount, 2) - 0.5) / canvas.width;
+        const jitterY = (halton(frameCount, 3) - 0.5) / canvas.height;
+        gl.uniform2f(uJitterLocation, jitterX, jitterY);
+
+        gl.bindVertexArray(vao); // 绑定 VAO
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // 绘制
+        requestAnimationFrame(render); // 请求下一帧
+      }
+
+      function initShaderProgram(gl, vsSource, fsSource) {
+        const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
+        const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+        if (!vertexShader || !fragmentShader) return null;
+        const shaderProgram = gl.createProgram(); //distinguish with createshader
+        gl.attachShader(shaderProgram, vertexShader);
+        gl.attachShader(shaderProgram, fragmentShader);
+        //two colomns above can be reversed
+        gl.linkProgram(shaderProgram);
+        if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+          alert(
+            "Unable to initialize the shader program: " +
+              gl.getProgramInfoLog(shaderProgram)
+          );
+          return null;
+        }
+        return shaderProgram;
+      }
+      function loadShader(gl, type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        //if compile fail
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          console.error(
+            "An error occurred compiling the shaders: " +
+              gl.getShaderInfoLog(shader)
+          );
+          alert(
+            "An error occurred compiling the shaders. Check console for details."
+          );
+          gl.deleteShader(shader);
+          return null;
+        }
+        return shader;
+      }
+
+      // Halton 序列函数，用于生成高质量的抖动采样点
+      function halton(index, base) {
+        let result = 0;
+        let f = 1;
+        while (index > 0) {
+          f = f / base;
+          result = result + f * (index % base);
+          index = Math.floor(index / base);
+        }
+        return result;
+      }
+      //#endregion
+    </script>
+  </body>
+</html>
