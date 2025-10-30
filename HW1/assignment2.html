@@ -19,39 +19,24 @@
     </style>
   </head>
   <body>
-    <canvas id="glCanvas" style="width: 600px; height: 600px" />
+    <canvas id="glCanvas" style="width: 400px; height: 400px" />
     <!-- type="notjs" makes it not get identified as javascript. -->
     <script id="vertex-shader" type="notjs">
       #version 300 es
       in vec4 pos;
       out vec2 coord;
       void main() {
-        coord = pos.xy;
+        coord = pos.xy*0.5+0.5;
         gl_Position = pos;
       }
     </script>
     <script id="fragment-shader" type="notjs">
-          #version 300 es
+      #version 300 es
       precision mediump float;
       in vec2 coord;
       out vec4 color_out;
-      uniform float u_time; // 从 JS 传入的时间，用于动画
-      //sdf
-      float sdBox(in vec2 p, in vec2 b)
-      {
-          vec2 d = abs(p)-b;
-          return length(max(d,0.0)) + min(max(d.x,d.y),0.0);
-      }
       void main() {
-        vec2 half_size = vec2(1, 0.5); // 宽为画布宽度，高为一半
-        // --- 颜色定义 (修改) ---
-        vec3 color_dark_blue = vec3(0.1, 0.3, 0.7);  // 深蓝
-        mat3 move = mat3(1,0,0,0,1,0,0.3*sin(2.0*u_time),0.7*cos(3.0*u_time),1);
-        mat3 rot = mat3(cos(u_time), sin(u_time), 0.0, -sin(u_time), cos(u_time), 0.0, 0.0, 0.0, 1.0);
-        vec3 rotres = rot * move * vec3(coord, 1.0);
-        float d = sdBox(rotres.xy, half_size);
-        float d1 = 1.0 - smoothstep(-0.01, 0.01, d);
-        color_out = vec4(d1*color_dark_blue, 1.0);
+        color_out = vec4(coord.x, 0.5, coord.y, 1.0);
       }
     </script>
     <script>
@@ -84,7 +69,6 @@
         gl.STATIC_DRAW
       );
       let vertexPosAttrib = gl.getAttribLocation(shaderProgram, "pos"); //返回“pos”入口的位置
-      const uTimeLocation = gl.getUniformLocation(shaderProgram, "u_time");
       gl.enableVertexAttribArray(vertexPosAttrib); //“启用入口”
       gl.vertexAttribPointer(vertexPosAttrib, 2, gl.FLOAT, false, 0, 0); //index size type normalized stride offset
       gl.bindVertexArray(null);
@@ -92,23 +76,11 @@
       //#endregion
 
       //#region draw
-      requestAnimationFrame(render); // 启动动画循环
+      gl.bindVertexArray(vao);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       //#endregion
 
-      //#region helper functions
-      function render(time) {
-        time *= 0.001; // 转换为秒
-
-        gl.clearColor(0.0, 0.0, 0.0, 1.0); // 设置清屏颜色为黑色
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
-        gl.useProgram(shaderProgram); // 激活着色器程序
-        gl.uniform1f(uTimeLocation, time); // 更新时间 uniform
-        gl.bindVertexArray(vao); // 绑定 VAO
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // 绘制
-        requestAnimationFrame(render); // 请求下一帧
-      }
-
+      //#region shader helper functions
       function initShaderProgram(gl, vsSource, fsSource) {
         const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
         const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
@@ -127,7 +99,6 @@
         }
         return shaderProgram;
       }
-
       function loadShader(gl, type, source) {
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);
