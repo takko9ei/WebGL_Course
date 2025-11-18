@@ -1,6 +1,7 @@
+<!DOCTYPE html>
 <html>
   <head>
-    <title>WebGL HW2 - Ramiel Scene</title>
+    <title>WebGL HW2 - Ramiel Scene with Dynamic Depth Gradients</title>
     <style>
       body {
         display: flex;
@@ -12,25 +13,21 @@
       }
       canvas {
         border: 1px solid white;
-        /* Ensure canvas uses the full viewport if needed, but we respect the explicit size */
       }
     </style>
   </head>
   <body>
-    <canvas id="glCanvas" width="640" height="480" />
+    <canvas id="glCanvas" width="640" height="480"></canvas>
 
     <script id="vertex-shader" type="notjs">
       #version 300 es
 
-      // Input: Vertex position from the VBO
       in vec3 pos;
 
-      // Uniforms: Matrices set from JavaScript
       uniform mat4 uModelMatrix;
       uniform mat4 uViewMatrix;
       uniform mat4 uProjectionMatrix;
 
-      // Output: Pass the view-space depth to the fragment shader
       out float vDepth;
 
       void main() {
@@ -40,8 +37,11 @@
         // Calculate the final position in Clip Space
         gl_Position = uProjectionMatrix * viewPosition;
 
-        // Pass the Z-coordinate (depth) to the fragment shader
-        // In view space, Z is negative, so -5 is closer than -20.
+        // Pass the Z-coordinate (depth) to the fragment shader.
+        // In View Space:
+        // 0 is the camera lens.
+        // Negative values are in front of the camera.
+        // e.g., -5 is closer than -20.
         vDepth = viewPosition.z;
       }
     </script>
@@ -50,39 +50,34 @@
       #version 300 es
       precision mediump float;
 
-      // Input: Interpolated depth from the vertex shader
       in float vDepth;
 
-      // Uniform: The base color for the object (blue for Ramiel, grey for floor)
       uniform vec3 uBaseColor;
+
+      // uDepthNear: The Z value where brightness is maximum (closest visible point)
+      // uDepthFar:  The Z value where brightness is minimum (farthest visible point)
+      uniform float uDepthNear;
+      uniform float uDepthFar;
 
       // Output: The final pixel color
       out vec4 color_out;
 
       void main() {
-        // Define the visualization range in View Space (camera-relative)
-        // We want full brightness around z = -4
-        float z_near_vis = -4.0;
-        // We want minimum brightness around z = -25
-        float z_far_vis = -25.0;
+        // Normalize vDepth based on the specific object's range.
+        // Result: 0.0 at far limit, 1.0 at near limit.
+        float depthFactor = (vDepth - uDepthFar) / (uDepthNear - uDepthFar);
 
-        // Normalize vDepth (which is negative) into a 0.0 (far) to 1.0 (near) range
-        float depthFactor = (vDepth - z_far_vis) / (z_near_vis - z_far_vis);
-
-        // Clamp to ensure it's within [0, 1]
         depthFactor = clamp(depthFactor, 0.0, 1.0);
 
-        // Use mix() to map the 0-1 range to a [min_brightness, 1.0] range
-        // This prevents the object from becoming pure black
-        float brightness = mix(0.2, 1.0, depthFactor); // 0.2 = min brightness, 1.0 = max
+        float brightness = mix(0.2, 1.0, depthFactor);
 
-        // Final color is the base color multiplied by the depth-based brightness
+        // Final color calculation
         color_out = vec4(uBaseColor * brightness, 1.0);
       }
     </script>
 
     <script>
-      // A minimal matrix math library for 4x4 matrices (mat4)
+      //mini mat lib
       const MiniMat = {
         create: () => new Float32Array(16),
         identity: (out) => {
@@ -94,16 +89,16 @@
           let a00 = a[0],
             a01 = a[1],
             a02 = a[2],
-            a03 = a[3],
-            a10 = a[4],
+            a03 = a[3];
+          let a10 = a[4],
             a11 = a[5],
             a12 = a[6],
-            a13 = a[7],
-            a20 = a[8],
+            a13 = a[7];
+          let a20 = a[8],
             a21 = a[9],
             a22 = a[10],
-            a23 = a[11],
-            a30 = a[12],
+            a23 = a[11];
+          let a30 = a[12],
             a31 = a[13],
             a32 = a[14],
             a33 = a[15];
@@ -189,7 +184,6 @@
           return out;
         },
         translate: (out, a, v) => {
-          // Note: This is a simple translate, not a full post-multiply translate
           if (a !== out) MiniMat.identity(out);
           out[12] = a[12] + v[0];
           out[13] = a[13] + v[1];
@@ -212,22 +206,22 @@
           let a00 = a[0],
             a01 = a[1],
             a02 = a[2],
-            a03 = a[3],
-            a10 = a[4],
+            a03 = a[3];
+          let a10 = a[4],
             a11 = a[5],
             a12 = a[6],
-            a13 = a[7],
-            a20 = a[8],
+            a13 = a[7];
+          let a20 = a[8],
             a21 = a[9],
             a22 = a[10],
             a23 = a[11];
           let b00 = x * x * t + c,
             b01 = y * x * t + z * s,
-            b02 = z * x * t - y * s,
-            b10 = x * y * t - z * s,
+            b02 = z * x * t - y * s;
+          let b10 = x * y * t - z * s,
             b11 = y * y * t + c,
-            b12 = z * y * t + x * s,
-            b20 = x * z * t + y * s,
+            b12 = z * y * t + x * s;
+          let b20 = x * z * t + y * s,
             b21 = y * z * t - x * s,
             b22 = z * z * t + c;
           out[0] = a00 * b00 + a10 * b01 + a20 * b02;
@@ -252,23 +246,20 @@
         },
       };
 
-      //#region variables
-      // ... (floorVertices 保持不变)
+      //#region geo data
       const floorVertices = [
-        -10.0, -2, 10.0, 10.0, -2.5, 10.0, -10.0, -2.5, -10.0, 10.0, -2.5,
+        -10.0, -2.5, 10.0, 10.0, -2.5, 10.0, -10.0, -2.5, -10.0, 10.0, -2.5,
         -10.0,
       ];
 
-      // --- Ramiel (正八面体) ---
-      const vTop = [0.0, 3.0, 0.0];
-      const vBottom = [0.0, -3.0, 0.0];
+      const vTop = [0.0, 2.2, 0.0];
+      const vBottom = [0.0, -2.2, 0.0];
       const vLeft = [-2.0, 0.0, 0.0];
       const vRight = [2.0, 0.0, 0.0];
       const vFront = [0.0, 0.0, 2.0];
       const vBack = [0.0, 0.0, -2.0];
 
-      // 条带 1: 上半部分金字塔 (4 个三角形, 6 个顶点, 逆时针 CCW)
-
+      //we need to send the data twice, to FORCE use strip draw shape
       const ramielTopStrip = [
         ...vTop,
         ...vLeft,
@@ -277,8 +268,6 @@
         ...vRight,
         ...vBack,
       ];
-
-      // 条带 2: 下半部分金字塔 (4 个三角形, 6 个顶点, 逆时针 CCW)
       const ramielBottomStrip = [
         ...vBottom,
         ...vLeft,
@@ -287,75 +276,26 @@
         ...vRight,
         ...vFront,
       ];
-
-      // 合并为一个单一的、12顶点的条带
-      // GPU 将自动处理 vFront,vFront,vLeft 处的退化三角形
       const ramielVertices = [...ramielTopStrip, ...ramielBottomStrip];
-
-      // (我们不再需要 ramielTopVertCount 和 ramielBottomVertCount)
       //#endregion
 
-      //#region initialization
+      //#region initialize
       const canvas = document.getElementById("glCanvas");
       const gl = canvas.getContext("webgl2");
       if (!gl) throw new Error("WebGL 2.0 unsupported!");
 
-      // Set the background color (light blue)
-      gl.clearColor(0.8, 0.9, 1.0, 1.0); // R, G, B, A
-
-      // Enable depth testing for 3D occlusion
+      gl.clearColor(163 / 255, 208 / 255, 1.0, 1.0); // Darker background for better contrast
       gl.enable(gl.DEPTH_TEST);
       //#endregion
 
-      //#region shader setup
+      //#region shader set
       const vsSource = document.getElementById("vertex-shader").text.trim();
       const fsSource = document.getElementById("fragment-shader").text.trim();
       const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
-      // Note: gl.useProgram is now called inside the render loop
       //#endregion
 
-      //#region bind (Geometry Setup)
-
-      /**
-       * Helper function to create a VAO and VBO for a given geometry.
-       * @param {WebGL2RenderingContext} gl - The WebGL context
-       * @param {WebGLProgram} program - The shader program
-       * @param {Array<number>} vertices - The vertex data (flat array)
-       * @returns {{vao: WebGLVertexArrayObject, count: number}}
-       */
-      function initGeometry(gl, program, vertices) {
-        const vao = gl.createVertexArray();
-        const vbo = gl.createBuffer();
-
-        gl.bindVertexArray(vao);
-        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-        gl.bufferData(
-          gl.ARRAY_BUFFER,
-          new Float32Array(vertices),
-          gl.STATIC_DRAW
-        );
-
-        // Get the location of the 'pos' attribute in the shader
-        const posAttrib = gl.getAttribLocation(program, "pos");
-        gl.enableVertexAttribArray(posAttrib);
-
-        // Tell WebGL how to read the VBO
-        // index, size (3=vec3), type, normalized, stride, offset
-        gl.vertexAttribPointer(posAttrib, 3, gl.FLOAT, false, 0, 0);
-
-        gl.bindVertexArray(null); // Unbind the VAO
-
-        return {
-          vao: vao,
-          count: vertices.length / 3, // Number of vertices
-        };
-      }
-
-      // Create the geometry (VAO/VBO) for our two objects
-      const floorGeometry = initGeometry(gl, shaderProgram, floorVertices);
-      const ramielGeometry = initGeometry(gl, shaderProgram, ramielVertices);
-
-      // Get locations of all uniforms once (for efficiency)
+      //#region locations
+      const posAttrib = gl.getAttribLocation(shaderProgram, "pos");
       const uniformLocations = {
         modelMatrix: gl.getUniformLocation(shaderProgram, "uModelMatrix"),
         viewMatrix: gl.getUniformLocation(shaderProgram, "uViewMatrix"),
@@ -364,49 +304,63 @@
           "uProjectionMatrix"
         ),
         baseColor: gl.getUniformLocation(shaderProgram, "uBaseColor"),
+        // UNIFORMS for gradient control
+        depthNear: gl.getUniformLocation(shaderProgram, "uDepthNear"),
+        depthFar: gl.getUniformLocation(shaderProgram, "uDepthFar"),
       };
       //#endregion
 
-      //#region draw (Render Loop)
+      //#region geometry setup
+      function initGeometry(gl, program, vertices) {
+        const vao = gl.createVertexArray();
+        const vbo = gl.createBuffer();
+        gl.bindVertexArray(vao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferData(
+          gl.ARRAY_BUFFER,
+          new Float32Array(vertices),
+          gl.STATIC_DRAW
+        );
+        gl.enableVertexAttribArray(posAttrib); //vao works here
+        gl.vertexAttribPointer(posAttrib, 3, gl.FLOAT, false, 0, 0); //vao works here
+        gl.bindVertexArray(null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        return { vao: vao, count: vertices.length / 3 };
+      }
 
-      // --- Create Camera Matrices ---
+      const floorGeometry = initGeometry(gl, shaderProgram, floorVertices);
+      const ramielGeometry = initGeometry(gl, shaderProgram, ramielVertices);
 
-      // Create a perspective projection matrix (the "lens")
+      //#endregion
+
+      //#region Rendering
       const projectionMatrix = MiniMat.create();
       MiniMat.perspective(
         projectionMatrix,
-        (45 * Math.PI) / 180, // 45-degree field of view
-        canvas.clientWidth / canvas.clientHeight, // aspect ratio
-        0.1, // near clip plane
-        100.0 // far clip plane
+        (45 * Math.PI) / 180,
+        canvas.clientWidth / canvas.clientHeight,
+        0.1,
+        100.0
       );
 
-      // Create a view matrix (the "camera position")
+      //cam set
       const viewMatrix = MiniMat.create();
-      // Position the camera at (0, 5, 12), look at (0,0,0), with (0,1,0) as "up"
-      MiniMat.lookAt(viewMatrix, [0, 5, 12], [0, 0, 0], [0, 1, 0]);
+      //camera at (0, 2, 15), looking at (0, 0, 0)
+      //view space Z will be approx -15
+      MiniMat.lookAt(viewMatrix, [0, 2, 15], [0, 0, 0], [0, 1, 0]);
 
-      // --- Create Model Matrices ---
       const floorModelMatrix = MiniMat.create();
-      MiniMat.identity(floorModelMatrix); // Floor doesn't move
+      MiniMat.identity(floorModelMatrix);
 
       const ramielModelMatrix = MiniMat.create();
-      // We will update this one every frame
 
-      /**
-       * The main render loop function.
-       * @param {number} time - Time elapsed since page load (in milliseconds)
-       */
       function drawScene(time) {
-        time *= 0.001; // Convert time to seconds
+        time *= 0.001;
 
-        // 1. Prepare for drawing
-        // Clear the color and depth buffers
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        // Tell WebGL to use our shader program
         gl.useProgram(shaderProgram);
 
-        // 2. Set camera uniforms (same for all objects)
+        //"global" uniforms
         gl.uniformMatrix4fv(
           uniformLocations.projectionMatrix,
           false,
@@ -414,64 +368,61 @@
         );
         gl.uniformMatrix4fv(uniformLocations.viewMatrix, false, viewMatrix);
 
-        // 3. Draw the Floor
-        gl.bindVertexArray(floorGeometry.vao); // Activate floor's geometry
+        //floor draw
+        gl.bindVertexArray(floorGeometry.vao);
         gl.uniformMatrix4fv(
           uniformLocations.modelMatrix,
           false,
           floorModelMatrix
         );
-        gl.uniform3f(uniformLocations.baseColor, 0.5, 0.5, 0.5); // Set color to grey
-        // Draw using TRIANGLE_STRIP, starting at vertex 0, drawing 'count' vertices
+        gl.uniform3f(uniformLocations.baseColor, 0.5, 0.5, 0.5); //grey
+
+        //floor gradient
+        //Floor span 10,-10. Camera is at 15
+        //Nearest point dist 5, view z =-5
+        //Farthest point dist 25, view z =-25
+        //set the range to cover this, fading to black at the back.
+        gl.uniform1f(uniformLocations.depthNear, -4.0);
+        gl.uniform1f(uniformLocations.depthFar, -30.0);
+
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, floorGeometry.count);
 
-        // 4. Draw Ramiel
-        gl.bindVertexArray(ramielGeometry.vao); // 激活 Ramiel 的 VAO
-
-        // 计算 Ramiel 的新变换 (不变)
+        //ramiel draw
+        gl.bindVertexArray(ramielGeometry.vao);
         MiniMat.identity(ramielModelMatrix);
-        MiniMat.translate(ramielModelMatrix, ramielModelMatrix, [0, 1.5, 0]);
         MiniMat.rotate(
           ramielModelMatrix,
           ramielModelMatrix,
           time * 0.5,
           [0, 1, 0]
         );
-
-        // 发送矩阵和颜色 (不变)
         gl.uniformMatrix4fv(
           uniformLocations.modelMatrix,
           false,
           ramielModelMatrix
         );
-        gl.uniform3f(uniformLocations.baseColor, 0.2, 0.4, 1.0); // 蓝色
+        gl.uniform3f(uniformLocations.baseColor, 0.2, 0.4, 1.0); //blue
 
-        // *** 修正的绘制流程 ***
-        // 使用 ramielGeometry.count (它应该是 12)
-        gl.drawArrays(
-          gl.TRIANGLE_STRIP,
-          0,
-          ramielGeometry.count // 绘制所有 12 个顶点
-        );
+        //gradient setting like floor
+        gl.uniform1f(uniformLocations.depthNear, -12.0); //brightest(shallow)
+        gl.uniform1f(uniformLocations.depthFar, -15.2); //darkest(deep)
 
-        // 5. 请求下一帧 (不变)
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, ramielGeometry.count);
+
         requestAnimationFrame(drawScene);
       }
 
-      // Start the render loop
       requestAnimationFrame(drawScene);
-
       //#endregion
 
-      //#region shader helper functions (Unchanged from your framework)
+      //#region shader compile helper
       function initShaderProgram(gl, vsSource, fsSource) {
         const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
         const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
         if (!vertexShader || !fragmentShader) return null;
-        const shaderProgram = gl.createProgram(); //distinguish with createshader
+        const shaderProgram = gl.createProgram();
         gl.attachShader(shaderProgram, vertexShader);
         gl.attachShader(shaderProgram, fragmentShader);
-        //two colomns above can be reversed
         gl.linkProgram(shaderProgram);
         if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
           alert(
@@ -485,18 +436,9 @@
       function loadShader(gl, type, source) {
         const shader = gl.createShader(type);
         gl.shaderSource(shader, source);
-        console.log("Compiling shader:\n" + source);
-
         gl.compileShader(shader);
-        //if compile fail
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-          console.error(
-            "An error occurred compiling the shaders: " +
-              gl.getShaderInfoLog(shader)
-          );
-          alert(
-            "An error occurred compiling the shaders. Check console for details."
-          );
+          console.error("Shader compile error: " + gl.getShaderInfoLog(shader));
           gl.deleteShader(shader);
           return null;
         }
