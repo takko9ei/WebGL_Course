@@ -2,26 +2,34 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>WebGL2 Triangle</title>
+    <meta name="webgl2 test" content="generative design" author = "LI Zhuohang"/>
+    <title>WebGL2 Test</title>
     <style>
         /* center canvas in the middle of the screen */
         html, body {
             height: 100%;
             margin: 0;
+            /* * 原始代码: background-color: #5e5e5e; 
+             * * 修改点 1: 移除 html, body 上的 background-color 
+             * 让 body 的背景颜色生效 
+             */
         }
         body {
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #111;
-            color: #ddd;
+            /* * 原始代码: background: #111;
+             * * 修改点 2: 将 body 的背景色改为白色 (#fff)
+             * body 的背景会填充除了 canvas 之外的整个视口
+             */
+            background: #fff; 
+            color: #333; /* 提高 body 内文本的可读性，改为深色 */
             font-family: sans-serif;
         }
         canvas {
             width: 640px;    /* CSS size */
             height: 480px;   /* CSS size */
-            background: #222;
+            background: #5e5e5e; /* 保持 Canvas 自身的背景颜色不变 */
             box-shadow: 0 6px 30px rgba(0,0,0,0.6);
             border-radius: 6px;
         }
@@ -136,7 +144,7 @@
             gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
             // Clear
-            gl.clearColor(0.06, 0.06, 0.06, 1.0);
+            gl.clearColor(0, 0, 0, 1.0);
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             // Draw triangle
