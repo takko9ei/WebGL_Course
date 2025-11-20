@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>WebGL2 Triangle</title>
+    <style>
+        /* center canvas in the middle of the screen */
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #111;
+            color: #ddd;
+            font-family: sans-serif;
+        }
+        canvas {
+            width: 640px;    /* CSS size */
+            height: 480px;   /* CSS size */
+            background: #222;
+            box-shadow: 0 6px 30px rgba(0,0,0,0.6);
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="glcanvas"></canvas>
+
+    <script>
+        // Acquire canvas and WebGL2 context named "gl"
+        const canvas = document.getElementById('glcanvas');
+        const gl = canvas.getContext('webgl2');
+        if (!gl) {
+            alert('WebGL2 not supported in this browser.');
+            throw new Error('WebGL2 not supported');
+        }
+
+        // Simple GLSL ES 3.00 shaders
+        const vsSource = `#version 300 es
+        in vec2 a_position;
+        in vec3 a_color;
+        out vec3 v_color;
+        void main() {
+            gl_Position = vec4(a_position, 0.0, 1.0);
+            v_color = a_color;
+        }`;
+
+        const fsSource = `#version 300 es
+        precision mediump float;
+        in vec3 v_color;
+        out vec4 outColor;
+        void main() {
+            outColor = vec4(v_color, 1.0);
+        }`;
+
+        function compileShader(src, type) {
+            const sh = gl.createShader(type);
+            gl.shaderSource(sh, src);
+            gl.compileShader(sh);
+            if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+                const log = gl.getShaderInfoLog(sh);
+                gl.deleteShader(sh);
+                throw new Error('Shader compile error: ' + log);
+            }
+            return sh;
+        }
+
+        function createProgram(vsSrc, fsSrc) {
+            const vs = compileShader(vsSrc, gl.VERTEX_SHADER);
+            const fs = compileShader(fsSrc, gl.FRAGMENT_SHADER);
+            const prog = gl.createProgram();
+            gl.attachShader(prog, vs);
+            gl.attachShader(prog, fs);
+            gl.linkProgram(prog);
+            if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+                const log = gl.getProgramInfoLog(prog);
+                gl.deleteProgram(prog);
+                throw new Error('Program link error: ' + log);
+            }
+            // shaders can be deleted after linking
+            gl.deleteShader(vs);
+            gl.deleteShader(fs);
+            return prog;
+        }
+
+        const program = createProgram(vsSource, fsSource);
+
+        // Triangle vertex data: interleaved positions (x,y) and colors (r,g,b)
+        const vertices = new Float32Array([
+            0.0,  0.6,  1.0, 0.2, 0.2,  // top (red)
+         -0.6, -0.4,  0.2, 1.0, 0.2,  // left (green)
+            0.6, -0.4,  0.2, 0.2, 1.0   // right (blue)
+        ]);
+
+        // Create VAO and VBO, configure attributes
+        const vao = gl.createVertexArray();
+        gl.bindVertexArray(vao);
+
+        const vbo = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+        const stride = 5 * Float32Array.BYTES_PER_ELEMENT;
+        const posLoc = gl.getAttribLocation(program, 'a_position');
+        gl.enableVertexAttribArray(posLoc);
+        gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, stride, 0);
+
+        const colLoc = gl.getAttribLocation(program, 'a_color');
+        gl.enableVertexAttribArray(colLoc);
+        gl.vertexAttribPointer(colLoc, 3, gl.FLOAT, false, stride, 2 * Float32Array.BYTES_PER_ELEMENT);
+
+        // Unbind for cleanliness
+        gl.bindVertexArray(null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+        // Handle high-DPI and resizing
+        function resizeCanvasToDisplaySize(canvas) {
+            const dpr = window.devicePixelRatio || 1;
+            const displayWidth  = Math.round(canvas.clientWidth  * dpr);
+            const displayHeight = Math.round(canvas.clientHeight * dpr);
+            if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+                canvas.width = displayWidth;
+                canvas.height = displayHeight;
+                return true;
+            }
+            return false;
+        }
+
+        function render() {
+            // Resize and set viewport
+            resizeCanvasToDisplaySize(canvas);
+            gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+
+            // Clear
+            gl.clearColor(0.06, 0.06, 0.06, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            // Draw triangle
+            gl.useProgram(program);
+            gl.bindVertexArray(vao);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+            gl.bindVertexArray(null);
+            gl.useProgram(null);
+        }
+
+        // Render once and also on window resize
+        render();
+        window.addEventListener('resize', render);
+    </script>
+</body>
+</html>
