@@ -15,7 +15,7 @@ float smoothUnion(float d1, float d2, float k);
 void main() {
    vec2 centcoord = gl_FragCoord.xy/u_resolution.xy;
    
-   vec2 center2 = centcoord-vec2(0.580,0.540);
+   vec2 center2 = centcoord-vec2(0.650,0.460);
    vec2 a2 = vec2(0.320,0.380);
    vec2 b2 = vec2(0.070,0.060);
    float w2 = 0.088;
@@ -23,18 +23,18 @@ void main() {
    
    //**rule here: the no. of param of shape #n, follows its no
    //egg shape 0
-   vec2 center0 = centcoord-vec2(0.730,0.730);//center definition, same below
+   vec2 center0 = centcoord-vec2(0.820,0.670);//center definition, same below
    float theta0 = -4.256;
    mat2 rotate0 = mat2(cos(theta0),-sin(theta0),sin(theta0),cos(theta0));
-   float he0 = 0.236; 
+   float he0 = 0.244; 
     // ra: Bottom radius (radius at the base)
     float ra0 = 0.102;
     // rb: Top radius (radius at the tip)
-    float rb0 = 0.056; 
+    float rb0 = 0.072; 
     // bu: "Bulge" factor? (Usually 1.0 for standard geometry calculation)
     //     Normally this variable is not in standard sdEgg, but based on formula, 
     //     it scales 'r'. Keep it at 1.0 or adjust slightly for shape variations.
-    float bu0 = 0.296;
+    float bu0 = 0.264;
    float d0 = sdEgg(rotate0*center0, he0, ra0, rb0, bu0);
    
    vec2 center1 = centcoord-vec2(0.520,0.740);
@@ -45,6 +45,15 @@ void main() {
    
    
    float d = smoothUnion(d0,d2,0.048);
+   //here, d1 no use
+   //implemented the body part
+   //the body part will be one texture
+   
+   //and the fin part will be one
+   //the tail part will be one
+   //total 3 parts
+   
+   //optional: fore fin
    
    
     float mask = step(d, 0.0);
