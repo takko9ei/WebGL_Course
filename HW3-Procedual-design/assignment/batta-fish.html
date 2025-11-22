@@ -29,7 +29,7 @@
 
       /** @type {WebGL2RenderingContext} */
       const gl = canvas.getContext("webgl2");
-      
+
       if (!gl) {
         alert("WebGL2 not supported in this browser.");
         throw new Error("WebGL2 not supported");
@@ -113,7 +113,42 @@
       
       void main() {
         vec2 centcoord = vPosition;
-        outColor = vec4(vPosition*0.5+0.5,1.0,1.0);
+        //the head, id:0
+        vec2 center0 = centcoord-vec2(0.650,0.460);
+        vec2 a0 = vec2(0.320,0.380);
+        vec2 b0 = vec2(0.070,0.060);
+        float w0 = 0.088;
+        float d0 =sdOrientedVesica(center0,a0,b0,w0);
+        //the body, id:1
+        //**NOTICE: THE ROTATE HERE CAN BE PRE COMPUTED
+        vec2 center1 = centcoord-vec2(0.820,0.670);//center definition, same below
+        float theta1 = -4.256;
+        mat2 rotate1 = mat2(cos(theta1),-sin(theta1),sin(theta1),cos(theta1));
+        float he1 = 0.244; // "height"
+        float ra1 = 0.102;// Bottom radius
+        float rb1 = 0.072;// Top radius
+        float bu1 = 0.264;// "width"
+        float d1 = sdEgg(rotate1*center1, he1, ra1, rb1, bu1);
+        //the tail, id: 2
+        //**NOTICE: THE ROTATE HERE CAN BE PRE COMPUTED
+        //**NOTICE: THE ITIME HERE SHOULD BE REPLACED
+        float theta2 = -4.360;
+        mat2 rotate2 = mat2(cos(theta2),-sin(theta2),sin(theta2),cos(theta2));
+        vec2 center2 = centcoord - vec2(0.570,0.570);
+        vec2 c2 = vec2(0.920,0.280);
+        float r2 = 0.500;
+        float itime2 = 0.200;
+        float d2 = sdBettaTailShape(rotate2*center2,c2,r2,itime2);
+        //COMBINE MASK
+        //head(0) and body(1) shares one texture
+        float d_headbody = smoothUnion(d0,d1,0.048);
+        //tail(2) have individual texture
+        float d_tail = d2;
+        //fins(other) shares one texture
+
+        float d_temp = smoothUnion(d_headbody,d_tail,0.048);
+        float mask = step(d_temp,0.0);
+        outColor = mask*vec4(vPosition*0.5+0.5,1.0,1.0);
       }`;
       //shader helper
       function compileShader(ingl, type, source) {
@@ -171,7 +206,8 @@
 
       requestAnimationFrame(draw);
 
-      function draw(time){//animation loop ver
+      function draw(time) {
+        //animation loop ver
         time *= 0.001;
         gl.clear(gl.COLOR_BUFFER_BIT);
         gl.bindVertexArray(vao);
