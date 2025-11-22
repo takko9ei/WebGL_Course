@@ -21,7 +21,7 @@
     </style>
   </head>
   <body>
-    <canvas id="myCanvas"> </canvas>
+    <canvas id="myCanvas" width="700" height="700"> </canvas>
     <script>
       //#region glsetup
       /** @type {HTMLCanvasElement} */
@@ -44,7 +44,7 @@
       in vec2 position;
       out vec2 vPosition;
       void main() {
-        vPosition = position;
+        vPosition = position*0.5+0.5;
         gl_Position = vec4(position, 0.0, 1.0);
       }`;
       const fsSource = `#version 300 es
@@ -81,7 +81,7 @@
       }
       float sdBettaTailShape( vec2 p, vec2 c, float r, float iTime )
       {
-          // modified from sdPie by Mr. Inigo Quilez
+          // modified from sdPie by Inigo Quilez
           // additional logi
           // 1. 在 abs(p.x) 之前获取原始角度。atan(y, x) 返回 [-PI, PI]
           float angle = atan(p.y, p.x);
