@@ -81,11 +81,10 @@ float sdEgg( in vec2 p, in float he, in float ra, in float rb, in float bu )
 }
 
 float getRuffleNoise(float angle, float time,float noiseScale) {
-    // numbers here has no special meaning, just random values
     float noise = sin(angle * 8.3 + time * 2.0) * 0.5;
     noise += sin(angle * 17.7 - time * 3.5) * 0.25;
     noise += sin(angle * 37.9 + time * 4.5) * 0.125;
-    return noise * noiseScale; //the noise strength
+    return noise * noiseScale; 
 }
 
 float sdBettaTailShape( vec2 p, vec2 c, float r, float iTime )
@@ -97,84 +96,6 @@ float sdBettaTailShape( vec2 p, vec2 c, float r, float iTime )
     float m = length(p-c*clamp(dot(p,c),0.0,r)); 
     return max(l,m*sign(c.y*p.x-c.x*p.y));
 }
-
-float getSideWobble(float dist, float time) {
-    float noise = sin(dist * 10.0 - time * 3.0) * 0.5;
-    noise += sin(dist * 20.0 + time * 4.0) * 0.30;
-    
-    // 关键点：乘以 dist * 0.15
-    // 这样根部 (dist=0) 完全不动，越往末端摆动幅度越大，符合生物学
-    return noise * 0.25 * dist; 
-}
-
-float sdBettaTailShape3edges(vec2 p, vec2 c, float r, float iTime) {
-    float angle = atan(p.y, p.x);
-    float ruffleOffset = getRuffleNoise(angle, iTime,0.12) * r;
-    
-    // 计算到圆弧的距离 'l'
-    // 这里使用原始坐标 p 的长度，减去带噪声的半径
-    float l = length(p) - (r + ruffleOffset);
-
-    // 处理直边
-    // 我们需要旋转坐标 p，来模拟侧边的摆动
-    float dist = length(p); // 获取当前点离中心的距离
-    float wobbleAngle = getSideWobble(dist, iTime); // 根据距离计算扭曲角度
-
-    // 构建 2D 旋转矩阵
-    float co = cos(wobbleAngle);
-    float si = sin(wobbleAngle);
-    mat2 rot = mat2(co, -si, si, co);
-
-    // 旋转 p 得到专门用于计算侧边的临时坐标 pSide
-    vec2 pSide = rot * p;
-
-    // 标准扇形计算
-    // 这里使用 pSide 来计算 m (侧边距离)，而不是原始 p
-    pSide.x = abs(pSide.x);
-    
-    // 计算到直边的距离 'm'
-    // 为了让侧边和圆弧完美衔接，clamp 的上限建议也加上 ruffleOffset (或者取近似值 r)
-    // 但注意 ruffleOffset 是基于原始角度的
-    float m = length(pSide - c * clamp(dot(pSide, c), 0.0, r));
-
-    // 组合
-    // 结合圆弧距离 l 和侧边距离 m
-    // 这里的 sign 判断也必须使用旋转后的 pSide，否则内部填充会错位
-    return max(l, m * sign(c.y * pSide.x - c.x * pSide.y));
-}
-
-float sdBettaTailShapeRadius(vec2 p, vec2 c, float r, float iTime) {
-    float angle = atan(p.y, p.x);
-    float ruffleOffset = getRuffleNoise(angle, iTime,0.12) * r;
-    
-    // 处理直边
-    // 我们需要旋转坐标 p，来模拟侧边的摆动
-    float dist = length(p); // 获取当前点离中心的距离
-    float wobbleAngle = getSideWobble(dist, iTime); // 根据距离计算扭曲角度
-
-    // 构建 2D 旋转矩阵
-    float co = cos(wobbleAngle);
-    float si = sin(wobbleAngle);
-    mat2 rot = mat2(co, -si, si, co);
-
-    // 旋转 p 得到专门用于计算侧边的临时坐标 pSide
-    vec2 pSide = rot * p;
-
-    // 标准扇形计算
-    // 这里使用 pSide 来计算 m (侧边距离)，而不是原始 p
-    pSide.x = abs(pSide.x);
-    
-    // 计算到直边的距离 'm'
-    // 为了让侧边和圆弧完美衔接，clamp 的上限建议也加上 ruffleOffset (或者取近似值 r)
-    // 但注意 ruffleOffset 是基于原始角度的
-    float m = length(pSide - c * clamp(dot(pSide, c), 0.0, r));
-
-    // 组合
-    // 结合圆弧距离 l 和侧边距离 m
-    // 这里的 sign 判断也必须使用旋转后的 pSide，否则内部填充会错位
-    return max(dist, m * sign(c.y * pSide.x - c.x * pSide.y));
-}
-
 
 float sdOrientedVesica( vec2 p, vec2 a, vec2 b, float w )
 {
@@ -189,43 +110,18 @@ float sdOrientedVesica( vec2 p, vec2 a, vec2 b, float w )
 
 float sdMoon(vec2 p, float d, float ra, float rb, float intensity, float iTime )
 {
-    // --- 步骤 A: 预处理对称性 ---
-    // 原函数利用了上下对称性。这意味着我们的噪声也会随之上下对称（镜像）。
-    // 如果想要非对称的噪声，需要修改这行代码的逻辑，但为了保持 SDF 算法的稳定性，
-    // 我们暂时保留这个对称性，这意味着月亮咬痕的上下两半是镜像的。
     p.y = abs(p.y);
-
-    // --- 步骤 B: 计算相对于“小圆圆心”的角度 ---
-    // 小圆圆心在 (d, 0)。
-    // 我们需要计算当前点 p 到 (d, 0) 的向量。
     vec2 relP = p - vec2(d, 0.0);
-    
-    // 获取角度。atan(y, x) 返回弧度。
     float angle = atan(relP.y, relP.x);
-
-    // --- 步骤 C: 计算扰动后的半径 ---
-    
-    // 这里的 rb 变成了变量。
-    // 注意：我们把 getNoise 的结果加到 rb 上
     float noisy_rb = rb + getRuffleNoise(angle,iTime, intensity);
-
-    // --- 步骤 D: 代入原公式 ---
-    // 关键点：原本公式中所有用到 rb 的地方，现在全部都要换成 noisy_rb
-    // 这样才能保证月亮的尖角 (intersection points) 计算是基于变形后的圆的
-    
     float a = (ra*ra - noisy_rb*noisy_rb + d*d)/(2.0*d);
     float b = sqrt(max(ra*ra-a*a,0.0));
     
+    // 如果 d 为负数，这里的逻辑可能会出错，导致内部返回正距离
     if( d*(p.x*b-p.y*a) > d*d*max(b-p.y,0.0) )
           return length(p-vec2(a,b));
-    
     return max( (length(p)-ra),
                -(length(p-vec2(d,0))-noisy_rb));
-}
-
-float smoothUnion(float d1, float d2, float k) {
-    float h = clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0);
-    return mix(d2, d1, h) - k * h * (1.0 - h);
 }
 
 float smin_cubic( float a, float b, float k )
@@ -234,16 +130,32 @@ float smin_cubic( float a, float b, float k )
     return min( a, b ) - h*h*h*k*(1.0/6.0);
 }
 
+// 混合函数：同时混合距离(x)和颜色(yzw)
+vec4 opSmoothUnion(vec4 d1_c1, vec4 d2_c2, float k) {
+    float h = clamp( 0.5 + 0.5 * (d1_c1.x - d2_c2.x) / k, 0.0, 1.0 );
+    float dist = smin_cubic(d1_c1.x, d2_c2.x, k);
+    vec3 col = mix(d1_c1.yzw, d2_c2.yzw, h);
+    return vec4(dist, col);
+}
+
 void main() {
     vec2 st = gl_FragCoord.xy / u_resolution.xy;
-   vec2 centcoord = st * 2.0 - 1.0;
-    // --- 1. THE HEAD (ID:0) ---
+    vec2 centcoord = st * 2.0 - 1.0;
+
+    // --- Colors ---
+    vec3 color_body     = vec3(1.0, 0.4, 0.2); 
+    vec3 color_backfin  = vec3(0.8, 0.1, 0.1); 
+    vec3 color_bellyfin = vec3(0.2, 0.6, 1.0); 
+    vec3 color_tail     = vec3(0.7, 0.2, 0.6); 
+
+    // --- 1. HEAD ---
     vec2 center0 = centcoord - vec2(0.300, -0.080);
     vec2 a0 = vec2(0.640, 0.760); 
     vec2 b0 = vec2(0.140, 0.120); 
     float w0 = 0.176;             
     float d0 = sdOrientedVesica(center0, a0, b0, w0);
-    // --- 2. THE BODY (ID:1) ---
+
+    // --- 2. BODY ---
     vec2 center1 = centcoord - vec2(0.640, 0.340);
     float theta1 = -4.256;
     mat2 rotate1 = mat2(cos(theta1), -sin(theta1), sin(theta1), cos(theta1));
@@ -252,53 +164,98 @@ void main() {
     float rb1 = 0.144;
     float bu1 = 0.528;
     float d1 = sdEgg(rotate1 * center1, he1, ra1, rb1, bu1);
-    // --- 3. THE TAIL (ID:2) ---
+
+    // --- 3. TAIL ---
     vec2 center2 = centcoord - vec2(0.140, 0.140);
     float theta2 = -4.360;
     mat2 rotate2 = mat2(cos(theta2), -sin(theta2), sin(theta2), cos(theta2));
     vec2 c2 = vec2(0.920, 0.280); 
     float r2 = 1.00; 
-    float itime2 = u_time; 
-    float d2 = sdBettaTailShape(rotate2 * center2, c2, r2, itime2);
-   //--- 4. THE BACK FIN (ID:3) ---
-   vec2 center3 = centcoord - vec2(-0.610,0.410);
-   float theta3 = 0.448;
-   mat2 rotate3 = mat2(cos(theta3), -sin(theta3), sin(theta3), cos(theta3));
-   float cfactor = 0.736;
-   mat2 compress = mat2(cfactor*st.x,0,0,1);
-   float pm3 = -0.440;
-   float ra3 = 0.480;
-   float rb3 = 0.688;
-   float iTime3 = u_time;
-   float intensity3 = 0.042;
-   float d3 = sdMoon(rotate3*compress*center3,pm3,ra3,rb3,intensity3,iTime3);
-	// --- 5. The belly fin(ID:4) ---
-   vec2 center4 = centcoord - vec2(0.390,0.050);
-   float theta4 = -5.408;
-   mat2 rotate4 = mat2(cos(theta4), -sin(theta4), sin(theta4), cos(theta4));
-   float pm4 = -0.752;
-   float ra4 = 0.376;
-   float rb4 = 0.616;
-   float iTime4 = u_time;
-   float intensity4 = 0.042;
-   float d4 = sdMoon(rotate4*center4,pm4,ra4,rb4,intensity4,iTime4);
+    float d2 = sdBettaTailShape(rotate2 * center2, c2, r2, u_time);
+
+    // --- 4. BACK FIN ---
+    vec2 center3 = centcoord - vec2(-0.37,0.410);
+    float theta3 = 0.448;
+    mat2 rotate3 = mat2(cos(theta3), -sin(theta3), sin(theta3), cos(theta3));
+    float cfactor = 0.736;
+    mat2 compress = mat2(cfactor*st.x,0,0,1);
+    float pm3 = -0.440; 
+    float ra3 = 0.480;
+    float rb3 = 0.688;
+    float intensity3 = 0.042;
+    float d3 = sdMoon(rotate3*compress*center3,pm3,ra3,rb3,intensity3,u_time);
+
+    // --- 5. BELLY FIN ---
+    vec2 center4 = centcoord - vec2(0.390,0.050);
+    float theta4 = -5.408;
+    mat2 rotate4 = mat2(cos(theta4), -sin(theta4), sin(theta4), cos(theta4));
+    float pm4 = -0.752;
+    float ra4 = 0.376;
+    float rb4 = 0.616;
+    float intensity4 = 0.042;
+    float d4 = sdMoon(rotate4*center4,pm4,ra4,rb4,intensity4,u_time);
 
     // --- 6. COMBINE ---
+
     float smooth_k = 0.096;
+    float fin_k = 0.04;
     
+    // 一个修正用的偏移量
+    // 这个值应该略大于或等于 fin_k。
+    // 它的作用是：允许鳍在身体表面下 fin_trim_offset 的深度内保持有效，
+    // 以便产生平滑过渡，但超过这个深度后，就强制认为它“离得远”，从而让身体颜色胜出。
+    float fin_trim_offset = -0.07; 
+
     float d_headbody = smin_cubic(d0, d1, smooth_k);
-    float d_headbodyfin = smin_cubic(d_headbody, d3, 0.04);
-    d_headbodyfin = smin_cubic(d_headbodyfin, d4, 0.04);
-    float d_tail = d2;
-    float d_temp = smin_cubic(d_headbodyfin, d_tail, smooth_k);
+    vec3 col_current = color_body; 
 
-    float mask = step(d_temp,0.0);
-    //temp cancel
-
+    // [关键修改] 创建一个专门用于计算颜色的代理 d 值
+    // 逻辑：max(d3, -(d_headbody + 偏移))
+    // 如果 d_headbody 很负（在身体深处），-(d+offset) 就会变很大，
+    // max 取大值，导致 d3_color_proxy 变成正数（外部）
+    // 这样在计算 h_back 时，身体的 d 就显得比鳍更小（更有优势）
+    float d3_color_proxy = max(d3, -(d_headbody + fin_trim_offset+0.03));
     
-    // Output color
-    vec3 colorwoutAlpha = vec3(centcoord * 0.5 + 0.5, 1.0);
-    colour_out = mask * vec4(colorwoutAlpha, 1.0);
+    // 注意：计算 h_back 时使用修正后的 d3_color_proxy
+    float h_back = clamp(0.5 + 0.5 * (d_headbody - d3_color_proxy) / fin_k, 0.0, 1.0);
+    
+    // 注意：计算形状 d_headbodyfin 时，依然使用原始的 d3，保证形状不变
+    float d_headbodyfin = smin_cubic(d_headbody, d3, fin_k);
+    
+    col_current = mix(col_current, color_backfin, h_back);
+
+    float d4_color_proxy = max(d4, -(d_headbody + fin_trim_offset));
+    
+    // 使用 proxy 计算权重
+    float h_belly = clamp(0.5 + 0.5 * (d_headbodyfin - d4_color_proxy) / fin_k, 0.0, 1.0);
+    // 使用原始 d4 计算形状
+    d_headbodyfin = smin_cubic(d_headbodyfin, d4, fin_k);
+    
+    col_current = mix(col_current, color_bellyfin, h_belly);
+
+    float k_tail_factor = smoothstep(-0.02, 0.1, d3); 
+    float dynamic_k = smooth_k * k_tail_factor;
+
+    float d_final;
+    float h_tail;
+    
+    if(dynamic_k < 0.001) {
+        d_final = min(d_headbodyfin, d2);
+        h_tail = (d_headbodyfin < d2) ? 0.0 : 1.0; 
+    } else {
+        h_tail = clamp(0.5 + 0.5 * (d_headbodyfin - d2) / dynamic_k, 0.0, 1.0);
+        d_final = smin_cubic(d_headbodyfin, d2, dynamic_k);
+    }
+    
+    col_current = mix(col_current, color_tail, h_tail);
+
+    // 强制规则
+    if (d3 < 0.0 && d2 < 0.0) {
+        col_current = color_backfin;
+    }
+
+    float mask = step(d_final, 0.0);
+    colour_out = mask * vec4(col_current, 1.0);
 }`;
 
       // --- SHADER COMPILATION HELPERS ---

@@ -41,84 +41,6 @@ float sdBettaTailShape( vec2 p, vec2 c, float r, float iTime )
     return max(l,m*sign(c.y*p.x-c.x*p.y));
 }
 
-float getSideWobble(float dist, float time) {
-    float noise = sin(dist * 10.0 - time * 3.0) * 0.5;
-    noise += sin(dist * 20.0 + time * 4.0) * 0.30;
-    
-    // 关键点：乘以 dist * 0.15
-    // 这样根部 (dist=0) 完全不动，越往末端摆动幅度越大，符合生物学
-    return noise * 0.25 * dist; 
-}
-
-float sdBettaTailShape3edges(vec2 p, vec2 c, float r, float iTime) {
-    float angle = atan(p.y, p.x);
-    float ruffleOffset = getRuffleNoise(angle, iTime,0.12) * r;
-    
-    // 计算到圆弧的距离 'l'
-    // 这里使用原始坐标 p 的长度，减去带噪声的半径
-    float l = length(p) - (r + ruffleOffset);
-
-    // 处理直边
-    // 我们需要旋转坐标 p，来模拟侧边的摆动
-    float dist = length(p); // 获取当前点离中心的距离
-    float wobbleAngle = getSideWobble(dist, iTime); // 根据距离计算扭曲角度
-
-    // 构建 2D 旋转矩阵
-    float co = cos(wobbleAngle);
-    float si = sin(wobbleAngle);
-    mat2 rot = mat2(co, -si, si, co);
-
-    // 旋转 p 得到专门用于计算侧边的临时坐标 pSide
-    vec2 pSide = rot * p;
-
-    // 标准扇形计算
-    // 这里使用 pSide 来计算 m (侧边距离)，而不是原始 p
-    pSide.x = abs(pSide.x);
-    
-    // 计算到直边的距离 'm'
-    // 为了让侧边和圆弧完美衔接，clamp 的上限建议也加上 ruffleOffset (或者取近似值 r)
-    // 但注意 ruffleOffset 是基于原始角度的
-    float m = length(pSide - c * clamp(dot(pSide, c), 0.0, r));
-
-    // 组合
-    // 结合圆弧距离 l 和侧边距离 m
-    // 这里的 sign 判断也必须使用旋转后的 pSide，否则内部填充会错位
-    return max(l, m * sign(c.y * pSide.x - c.x * pSide.y));
-}
-
-float sdBettaTailShapeRadius(vec2 p, vec2 c, float r, float iTime) {
-    float angle = atan(p.y, p.x);
-    float ruffleOffset = getRuffleNoise(angle, iTime,0.12) * r;
-    
-    // 处理直边
-    // 我们需要旋转坐标 p，来模拟侧边的摆动
-    float dist = length(p); // 获取当前点离中心的距离
-    float wobbleAngle = getSideWobble(dist, iTime); // 根据距离计算扭曲角度
-
-    // 构建 2D 旋转矩阵
-    float co = cos(wobbleAngle);
-    float si = sin(wobbleAngle);
-    mat2 rot = mat2(co, -si, si, co);
-
-    // 旋转 p 得到专门用于计算侧边的临时坐标 pSide
-    vec2 pSide = rot * p;
-
-    // 标准扇形计算
-    // 这里使用 pSide 来计算 m (侧边距离)，而不是原始 p
-    pSide.x = abs(pSide.x);
-    
-    // 计算到直边的距离 'm'
-    // 为了让侧边和圆弧完美衔接，clamp 的上限建议也加上 ruffleOffset (或者取近似值 r)
-    // 但注意 ruffleOffset 是基于原始角度的
-    float m = length(pSide - c * clamp(dot(pSide, c), 0.0, r));
-
-    // 组合
-    // 结合圆弧距离 l 和侧边距离 m
-    // 这里的 sign 判断也必须使用旋转后的 pSide，否则内部填充会错位
-    return max(dist, m * sign(c.y * pSide.x - c.x * pSide.y));
-}
-
-
 float sdOrientedVesica( vec2 p, vec2 a, vec2 b, float w )
 {
     float r = 0.5*length(b-a);
@@ -166,10 +88,23 @@ float sdMoon(vec2 p, float d, float ra, float rb, float intensity, float iTime )
                -(length(p-vec2(d,0))-noisy_rb));
 }
 
-float smin_cubic( float a, float b, float k )
+float sMinCubic( float a, float b, float k )
 {
     float h = max( k - abs(a-b), 0.0 )/k;
     return min( a, b ) - h*h*h*k*(1.0/6.0);
+}
+
+float sDiffCubic( float d1, float d2, float k )
+{
+    float h = max( k - abs(d1 + d2), 0.0 )/k;
+    return max( d1, -d2 ) + h*h*h*k*(1.0/6.0);
+}
+
+vec4 sUnion(vec4 d1_c1, vec4 d2_c2, float k) {
+    float h = clamp( 0.5 + 0.5 * (d1_c1.x - d2_c2.x) / k, 0.0, 1.0 );
+    float dist = sMinCubic(d1_c1.x, d2_c2.x, k);
+    vec3 col = mix(d1_c1.yzw, d2_c2.yzw, h);
+    return vec4(dist, col);
 }
 
 void main() {
@@ -219,24 +154,47 @@ void main() {
    float rb4 = 0.616;
    float iTime4 = u_time;
    float intensity4 = 0.042;
-   float d4 = sdMoon(rotate4*center4,pm4,ra4,rb4,intensity4,iTime4);
+   float d4 = sdMoon(rotate4*center4,pm4,ra4,rb4,intensity4,iTime4);    
 
-    // --- 6. COMBINE ---
+    // COLOR
+    vec3 color_body     = vec3(1.0, 0.4, 0.2); 
+    vec3 color_backfin  = vec3(0.8, 0.1, 0.1); 
+    vec3 color_bellyfin = vec3(0.2, 0.6, 1.0); 
+    vec3 color_tail     = vec3(0.7, 0.2, 0.6); 
+
+    // --- 6. CLIP AND COMBINE ---
     float smooth_k = 0.096;
+    float clip_margin = -0.01;
+    float fin_k = 0.04;
     
-    float d_headbody = smin_cubic(d0, d1, smooth_k);
+    float d_headbody = sMinCubic(d0, d1, smooth_k);
     float d_tail = d2;
     float d_backfin = d3;
     float d_bellyfin = d4;
-    float d_headbodyfin = smin_cubic(d_headbody, d_backfin, 0.04);
-    d_headbodyfin = smin_cubic(d_headbodyfin, d_bellyfin, 0.04);
-    float d_temp = smin_cubic(d_headbodyfin, d_tail, smooth_k);
 
-    float mask = step(d_temp,0.0);
+    float d_body_core = d_headbody + clip_margin;
+    float d_tail_core = d_tail + clip_margin-0.1;
+
+    d_backfin = sDiffCubic(d_backfin, d_body_core, 0.02);
+    d_bellyfin = sDiffCubic(d_bellyfin, d_body_core, 0.02);
+    d_bellyfin = sDiffCubic(d_bellyfin, d3, 0.02);
+    d_bellyfin = sDiffCubic(d_bellyfin,d_tail_core,0.02);
+
+    vec4 current_res = vec4(d_headbody, color_body);
+    current_res = sUnion(current_res, vec4(d_backfin, color_backfin), fin_k);
+    current_res = sUnion(current_res, vec4(d_bellyfin, color_bellyfin), fin_k);
+
+    if(d_backfin<0.0&&d_tail<0.0){
+        current_res.yzw = color_tail;
+    }
+
+    current_res = sUnion(current_res,vec4(d_tail,color_tail), fin_k);
+
+    float d_final = current_res.x;
+
+    float mask = step(d_final,0.0);
     //temp cancel
-
     
     // Output color
-    vec3 colorwoutAlpha = vec3(centcoord * 0.5 + 0.5, 1.0);
-    colour_out = mask * vec4(colorwoutAlpha, 1.0);
+    colour_out = mask * vec4(current_res.yzw, 1.0);
 }
