@@ -8,7 +8,7 @@ uniform vec2 u_mouse;
 
 // SDF Functions
 // Chinese comment use UTF-8
-float sdEgg( in vec2 p, in float he, in float ra, in float rb, in float bu )
+float sdEgg( vec2 p, float he, float ra, float rb, float bu )
 {
     float r = 0.5*(he + ra+rb)/bu;
     float da = r - ra;
@@ -130,7 +130,7 @@ float sdOrientedVesica( vec2 p, vec2 a, vec2 b, float w )
     return length( q-h.xy) - h.z;
 }
 
-float sdMoon(vec2 p, float d, float ra, float rb, float iTime )
+float sdMoon(vec2 p, float d, float ra, float rb, float intensity, float iTime )
 {
     // --- 步骤 A: 预处理对称性 ---
     // 原函数利用了上下对称性。这意味着我们的噪声也会随之上下对称（镜像）。
@@ -150,7 +150,7 @@ float sdMoon(vec2 p, float d, float ra, float rb, float iTime )
     
     // 这里的 rb 变成了变量。
     // 注意：我们把 getNoise 的结果加到 rb 上
-    float noisy_rb = rb + getRuffleNoise(angle,iTime,0.05);
+    float noisy_rb = rb + getRuffleNoise(angle,iTime, intensity);
 
     // --- 步骤 D: 代入原公式 ---
     // 关键点：原本公式中所有用到 rb 的地方，现在全部都要换成 noisy_rb
@@ -166,11 +166,6 @@ float sdMoon(vec2 p, float d, float ra, float rb, float iTime )
                -(length(p-vec2(d,0))-noisy_rb));
 }
 
-float smoothUnion(float d1, float d2, float k) {
-    float h = clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0);
-    return mix(d2, d1, h) - k * h * (1.0 - h);
-}
-
 float smin_cubic( float a, float b, float k )
 {
     float h = max( k - abs(a-b), 0.0 )/k;
@@ -179,16 +174,13 @@ float smin_cubic( float a, float b, float k )
 
 void main() {
     vec2 st = gl_FragCoord.xy / u_resolution.xy;
-    
-    vec2 centcoord = st * 2.0 - 1.0;
-
+   vec2 centcoord = st * 2.0 - 1.0;
     // --- 1. THE HEAD (ID:0) ---
     vec2 center0 = centcoord - vec2(0.300, -0.080);
     vec2 a0 = vec2(0.640, 0.760); 
     vec2 b0 = vec2(0.140, 0.120); 
     float w0 = 0.176;             
     float d0 = sdOrientedVesica(center0, a0, b0, w0);
-
     // --- 2. THE BODY (ID:1) ---
     vec2 center1 = centcoord - vec2(0.640, 0.340);
     float theta1 = -4.256;
@@ -198,7 +190,6 @@ void main() {
     float rb1 = 0.144;
     float bu1 = 0.528;
     float d1 = sdEgg(rotate1 * center1, he1, ra1, rb1, bu1);
-
     // --- 3. THE TAIL (ID:2) ---
     vec2 center2 = centcoord - vec2(0.140, 0.140);
     float theta2 = -4.360;
@@ -207,38 +198,39 @@ void main() {
     float r2 = 1.00; 
     float itime2 = u_time; 
     float d2 = sdBettaTailShape(rotate2 * center2, c2, r2, itime2);
+   //--- 4. THE BACK FIN (ID:3) ---
+   vec2 center3 = centcoord - vec2(-0.610,0.410);
+   float theta3 = 0.448;
+   mat2 rotate3 = mat2(cos(theta3), -sin(theta3), sin(theta3), cos(theta3));
+   float cfactor = 0.736;
+   mat2 compress = mat2(cfactor*st.x,0,0,1);
+   float pm3 = -0.440;
+   float ra3 = 0.480;
+   float rb3 = 0.688;
+   float iTime3 = u_time;
+   float intensity3 = 0.042;
+   float d3 = sdMoon(rotate3*compress*center3,pm3,ra3,rb3,intensity3,iTime3);
+	// --- 5. The belly fin(ID:4) ---
+   vec2 center4 = centcoord - vec2(0.390,0.050);
+   float theta4 = -5.408;
+   mat2 rotate4 = mat2(cos(theta4), -sin(theta4), sin(theta4), cos(theta4));
+   float pm4 = -0.752;
+   float ra4 = 0.376;
+   float rb4 = 0.616;
+   float iTime4 = u_time;
+   float intensity4 = 0.042;
+   float d4 = sdMoon(rotate4*center4,pm4,ra4,rb4,intensity4,iTime4);
 
-
-    //--- 4. THE BACK FIN (ID:3) ---
-    // i think this need to be reconsidered
-    vec2 center30 = centcoord - vec2(0.210,0.310);
-    float theta30 = 0.800;
-    mat2 rotate30= mat2(cos(theta30), -sin(theta30), sin(theta30), cos(theta30));
-    vec2 c30 = vec2(0.270,0.390); 
-    float r30 = 0.5; 
-    float itime30 = u_time; 
-    float d30 = sdBettaTailShape3edges(rotate30 * center30, c30, r30, itime30);
-   
-   vec2 center31 = centcoord - vec2(0.230,0.450);
-    float theta31 = 0.512;
-    mat2 rotate31 = mat2(cos(theta31), -sin(theta31), sin(theta31), cos(theta31));
-    float he31 = 0.304;
-    float ra31 = 0.092;
-    float rb31 = 0.224;
-    float bu31 = 0.344;
-    float d31 = sdEgg(rotate31 * center31, he31, ra31, rb31, bu31);
-
-    float d3 = smin_cubic(d31, d30, 0.148);
-
-    
-
-    // --- 4. COMBINE ---
+    // --- 6. COMBINE ---
     float smooth_k = 0.096;
     
-    float d_headbody = smoothUnion(d0, d1, smooth_k);
-    float d_headbodyfin = smoothUnion(d_headbody, d3, 0.04);
+    float d_headbody = smin_cubic(d0, d1, smooth_k);
     float d_tail = d2;
-    float d_temp = smoothUnion(d_headbodyfin, d_tail, smooth_k);
+    float d_backfin = d3;
+    float d_bellyfin = d4;
+    float d_headbodyfin = smin_cubic(d_headbody, d_backfin, 0.04);
+    d_headbodyfin = smin_cubic(d_headbodyfin, d_bellyfin, 0.04);
+    float d_temp = smin_cubic(d_headbodyfin, d_tail, smooth_k);
 
     float mask = step(d_temp,0.0);
     //temp cancel
