@@ -23,17 +23,18 @@ float sdEgg( in vec2 p, in float he, in float ra, in float rb, in float bu )
                 length(vec2(p.x,p.y-he))-rb );
 }
 
-float getRuffleNoise(float angle, float time) {
-    float noise = sin(angle * 8.0 + time * 1.5) * 0.5;
-    noise += sin(angle * 17.0 - time * 2.0) * 0.25;
-    noise += sin(angle * 37.0 + time * 3.5) * 0.125;
-    return noise * 0.12; //the noise strength
+float getRuffleNoise(float angle, float time,float noiseScale) {
+    // numbers here has no special meaning, just random values
+    float noise = sin(angle * 8.3 + time * 2.0) * 0.5;
+    noise += sin(angle * 17.7 - time * 3.5) * 0.25;
+    noise += sin(angle * 37.9 + time * 4.5) * 0.125;
+    return noise * noiseScale; //the noise strength
 }
 
 float sdBettaTailShape( vec2 p, vec2 c, float r, float iTime )
 {
     float angle = atan(p.y, p.x);
-    float ruffleOffset = getRuffleNoise(angle, iTime) * r;
+    float ruffleOffset = getRuffleNoise(angle, iTime,0.12) * r;
     p.x = abs(p.x);
     float l = length(p) - (r + ruffleOffset);
     float m = length(p-c*clamp(dot(p,c),0.0,r)); 
@@ -51,7 +52,7 @@ float getSideWobble(float dist, float time) {
 
 float sdBettaTailShape3edges(vec2 p, vec2 c, float r, float iTime) {
     float angle = atan(p.y, p.x);
-    float ruffleOffset = getRuffleNoise(angle, iTime) * r;
+    float ruffleOffset = getRuffleNoise(angle, iTime,0.12) * r;
     
     // 计算到圆弧的距离 'l'
     // 这里使用原始坐标 p 的长度，减去带噪声的半径
@@ -85,6 +86,39 @@ float sdBettaTailShape3edges(vec2 p, vec2 c, float r, float iTime) {
     return max(l, m * sign(c.y * pSide.x - c.x * pSide.y));
 }
 
+float sdBettaTailShapeRadius(vec2 p, vec2 c, float r, float iTime) {
+    float angle = atan(p.y, p.x);
+    float ruffleOffset = getRuffleNoise(angle, iTime,0.12) * r;
+    
+    // 处理直边
+    // 我们需要旋转坐标 p，来模拟侧边的摆动
+    float dist = length(p); // 获取当前点离中心的距离
+    float wobbleAngle = getSideWobble(dist, iTime); // 根据距离计算扭曲角度
+
+    // 构建 2D 旋转矩阵
+    float co = cos(wobbleAngle);
+    float si = sin(wobbleAngle);
+    mat2 rot = mat2(co, -si, si, co);
+
+    // 旋转 p 得到专门用于计算侧边的临时坐标 pSide
+    vec2 pSide = rot * p;
+
+    // 标准扇形计算
+    // 这里使用 pSide 来计算 m (侧边距离)，而不是原始 p
+    pSide.x = abs(pSide.x);
+    
+    // 计算到直边的距离 'm'
+    // 为了让侧边和圆弧完美衔接，clamp 的上限建议也加上 ruffleOffset (或者取近似值 r)
+    // 但注意 ruffleOffset 是基于原始角度的
+    float m = length(pSide - c * clamp(dot(pSide, c), 0.0, r));
+
+    // 组合
+    // 结合圆弧距离 l 和侧边距离 m
+    // 这里的 sign 判断也必须使用旋转后的 pSide，否则内部填充会错位
+    return max(dist, m * sign(c.y * pSide.x - c.x * pSide.y));
+}
+
+
 float sdOrientedVesica( vec2 p, vec2 a, vec2 b, float w )
 {
     float r = 0.5*length(b-a);
@@ -94,6 +128,42 @@ float sdOrientedVesica( vec2 p, vec2 a, vec2 b, float w )
     vec2 q = 0.5*abs(mat2(v.y,v.x,-v.x,v.y)*(p-c));
     vec3 h = (r*q.x<d*(q.y-r)) ? vec3(0.0,r,0.0) : vec3(-d,0.0,d+w);
     return length( q-h.xy) - h.z;
+}
+
+float sdMoon(vec2 p, float d, float ra, float rb, float iTime )
+{
+    // --- 步骤 A: 预处理对称性 ---
+    // 原函数利用了上下对称性。这意味着我们的噪声也会随之上下对称（镜像）。
+    // 如果想要非对称的噪声，需要修改这行代码的逻辑，但为了保持 SDF 算法的稳定性，
+    // 我们暂时保留这个对称性，这意味着月亮咬痕的上下两半是镜像的。
+    p.y = abs(p.y);
+
+    // --- 步骤 B: 计算相对于“小圆圆心”的角度 ---
+    // 小圆圆心在 (d, 0)。
+    // 我们需要计算当前点 p 到 (d, 0) 的向量。
+    vec2 relP = p - vec2(d, 0.0);
+    
+    // 获取角度。atan(y, x) 返回弧度。
+    float angle = atan(relP.y, relP.x);
+
+    // --- 步骤 C: 计算扰动后的半径 ---
+    
+    // 这里的 rb 变成了变量。
+    // 注意：我们把 getNoise 的结果加到 rb 上
+    float noisy_rb = rb + getRuffleNoise(angle,iTime,0.05);
+
+    // --- 步骤 D: 代入原公式 ---
+    // 关键点：原本公式中所有用到 rb 的地方，现在全部都要换成 noisy_rb
+    // 这样才能保证月亮的尖角 (intersection points) 计算是基于变形后的圆的
+    
+    float a = (ra*ra - noisy_rb*noisy_rb + d*d)/(2.0*d);
+    float b = sqrt(max(ra*ra-a*a,0.0));
+    
+    if( d*(p.x*b-p.y*a) > d*d*max(b-p.y,0.0) )
+          return length(p-vec2(a,b));
+    
+    return max( (length(p)-ra),
+               -(length(p-vec2(d,0))-noisy_rb));
 }
 
 float smoothUnion(float d1, float d2, float k) {
@@ -140,6 +210,7 @@ void main() {
 
 
     //--- 4. THE BACK FIN (ID:3) ---
+    // i think this need to be reconsidered
     vec2 center30 = centcoord - vec2(0.210,0.310);
     float theta30 = 0.800;
     mat2 rotate30= mat2(cos(theta30), -sin(theta30), sin(theta30), cos(theta30));
@@ -157,7 +228,7 @@ void main() {
     float bu31 = 0.344;
     float d31 = sdEgg(rotate31 * center31, he31, ra31, rb31, bu31);
 
-       float d3 = smin_cubic(d31, d30, 0.148);
+    float d3 = smin_cubic(d31, d30, 0.148);
 
     
 
@@ -170,6 +241,8 @@ void main() {
     float d_temp = smoothUnion(d_headbodyfin, d_tail, smooth_k);
 
     float mask = step(d_temp,0.0);
+    //temp cancel
+
     
     // Output color
     vec3 colorwoutAlpha = vec3(centcoord * 0.5 + 0.5, 1.0);
