@@ -111,30 +111,30 @@ void main() {
     vec2 st = gl_FragCoord.xy / u_resolution.xy;
    vec2 centcoord = st * 2.0 - 1.0;
     // --- 1. THE HEAD (ID:0) ---
-    vec2 center0 = centcoord - vec2(0.300, -0.080);
+    vec2 p0 = centcoord - vec2(0.300, -0.080);
     vec2 a0 = vec2(0.640, 0.760); 
     vec2 b0 = vec2(0.140, 0.120); 
     float w0 = 0.176;             
-    float d0 = sdOrientedVesica(center0, a0, b0, w0);
+    float d0 = sdOrientedVesica(p0, a0, b0, w0);
     // --- 2. THE BODY (ID:1) ---
-    vec2 center1 = centcoord - vec2(0.640, 0.340);
+    vec2 p1 = centcoord - vec2(0.640, 0.340);
     float theta1 = -4.256;
     mat2 rotate1 = mat2(cos(theta1), -sin(theta1), sin(theta1), cos(theta1));
     float he1 = 0.488;
     float ra1 = 0.204;
     float rb1 = 0.144;
     float bu1 = 0.528;
-    float d1 = sdEgg(rotate1 * center1, he1, ra1, rb1, bu1);
+    float d1 = sdEgg(rotate1 * p1, he1, ra1, rb1, bu1);
     // --- 3. THE TAIL (ID:2) ---
-    vec2 center2 = centcoord - vec2(0.140, 0.140);
+    vec2 p2 = centcoord - vec2(0.140, 0.140);
     float theta2 = -4.360;
     mat2 rotate2 = mat2(cos(theta2), -sin(theta2), sin(theta2), cos(theta2));
     vec2 c2 = vec2(0.920, 0.280); 
     float r2 = 1.00; 
     float itime2 = u_time; 
-    float d2 = sdBettaTailShape(rotate2 * center2, c2, r2, itime2);
+    float d2 = sdBettaTailShape(rotate2 * p2, c2, r2, itime2);
    //--- 4. THE BACK FIN (ID:3) ---
-   vec2 center3 = centcoord - vec2(-0.610,0.410);
+   vec2 p3 = centcoord - vec2(-0.610,0.410);
    float theta3 = 0.448;
    mat2 rotate3 = mat2(cos(theta3), -sin(theta3), sin(theta3), cos(theta3));
    float cfactor = 0.736;
@@ -144,9 +144,9 @@ void main() {
    float rb3 = 0.688;
    float iTime3 = u_time;
    float intensity3 = 0.042;
-   float d3 = sdMoon(rotate3*compress*center3,pm3,ra3,rb3,intensity3,iTime3);
+   float d3 = sdMoon(rotate3*compress*p3,pm3,ra3,rb3,intensity3,iTime3);
 	// --- 5. The belly fin(ID:4) ---
-   vec2 center4 = centcoord - vec2(0.390,0.050);
+   vec2 p4 = centcoord - vec2(0.390,0.050);
    float theta4 = -5.408;
    mat2 rotate4 = mat2(cos(theta4), -sin(theta4), sin(theta4), cos(theta4));
    float pm4 = -0.752;
@@ -154,7 +154,7 @@ void main() {
    float rb4 = 0.616;
    float iTime4 = u_time;
    float intensity4 = 0.042;
-   float d4 = sdMoon(rotate4*center4,pm4,ra4,rb4,intensity4,iTime4);    
+   float d4 = sdMoon(rotate4*p4,pm4,ra4,rb4,intensity4,iTime4);    
 
     // COLOR
     vec3 color_body     = vec3(1.0, 0.4, 0.2); 
