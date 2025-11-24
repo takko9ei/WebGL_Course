@@ -184,7 +184,7 @@ void main() {
     current_res = sUnion(current_res, vec4(d_backfin, color_backfin), fin_k);
     current_res = sUnion(current_res, vec4(d_bellyfin, color_bellyfin), fin_k);
 
-    if(d_backfin<0.0&&d_tail<0.0){
+    if(d_backfin<0.0&&d_tail<0.01){
         current_res.yzw = color_tail;
     }
 
