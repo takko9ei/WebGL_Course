@@ -8,6 +8,34 @@ uniform vec2 u_mouse;
 
 // SDF Functions
 // Chinese comment use UTF-8
+vec3 getFinPattern(vec2 uv, vec3 mainCol, vec3 subCol, float density, float rot, vec2 st, float iTime){
+    vec2 u0 = uv;
+    float speed = 0.5;
+    float shapeFactor = cos(clamp(uv.x * 1.2, -1.57, 1.57));
+    uv.y /= (shapeFactor * shapeFactor + 0.1);
+    for (int i = 0; i < 4; i++) {
+              float fi = float(i);
+              float offset = 0.15 / (fi + 1.0) * sin(fi * 3.0 * uv.y + iTime * speed + 0.3 * fi) + 0.5;
+              uv.x += offset;
+              uv.y += 0.1 / (fi + 1.0) * sin(fi * 4.0 * uv.x + iTime * speed * 0.8);
+    }
+    float pattern = sin(uv.x * density + uv.y * density);
+    pattern = abs(pattern);
+    pattern = 0.05 / max(pattern, 0.001); // max防止除0
+    pattern = min(pattern, 2.0);
+    vec3 col = mainCol;
+    col += vec3(0.2, 0.1, 0.4) * sin(u0.y * 2.0 + uv.y);
+    col *= pattern;
+    float mask = smoothstep(0.0, 1.0, shapeFactor);
+    mask = pow(mask, 3.0);
+    //float vFade = 1.0 - smoothstep(0.5, 1.0, abs(u0.y));
+
+    col *= mask;// * vFade;
+    return col;
+}
+
+//float getBodyPattern
+
 float sdEgg( vec2 p, float he, float ra, float rb, float bu )
 {
     float r = 0.5*(he + ra+rb)/bu;
@@ -109,7 +137,12 @@ vec4 sUnion(vec4 d1_c1, vec4 d2_c2, float k) {
 
 void main() {
     vec2 st = gl_FragCoord.xy / u_resolution.xy;
-   vec2 centcoord = st * 2.0 - 1.0;
+    vec2 centcoord = st * 2.0 - 1.0;
+    vec3 color_body     = vec3(1.0, 0.4, 0.2); 
+    vec3 color_backfin  = vec3(0.8, 0.1, 0.1); 
+    vec3 color_bellyfin = vec3(0.2, 0.6, 1.0); 
+    vec3 color_tail     = getFinPattern(centcoord,vec3(0.1, 0.6, 0.5),vec3(0.0, 0.0, 0.0),8.0,0.0,vec2(0.0,0.0),u_time);
+    vec2 uv = centcoord;
     // --- 1. THE HEAD (ID:0) ---
     vec2 p0 = centcoord - vec2(0.300, -0.080);
     vec2 a0 = vec2(0.640, 0.760); 
@@ -157,10 +190,6 @@ void main() {
    float d4 = sdMoon(rotate4*p4,pm4,ra4,rb4,intensity4,iTime4);    
 
     // COLOR
-    vec3 color_body     = vec3(1.0, 0.4, 0.2); 
-    vec3 color_backfin  = vec3(0.8, 0.1, 0.1); 
-    vec3 color_bellyfin = vec3(0.2, 0.6, 1.0); 
-    vec3 color_tail     = vec3(0.7, 0.2, 0.6); 
 
     // --- 6. CLIP AND COMBINE ---
     float smooth_k = 0.096;

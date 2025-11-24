@@ -27,65 +27,81 @@
     </script>
 
     <script id="fragmentShader" type="x-shader/x-fragment">
-            precision mediump float;
+                  precision mediump float;
 
-      uniform vec2 iResolution;
-      uniform float iTime;
+            uniform vec2 iResolution;
+            uniform float iTime;
 
-      void main() {
+            void main() {
           // 1. Setup Coordinates
-          // 保持长宽比，将中心设为 (0,0) 以便对称操作
+          // 保持长宽比
           vec2 uv = (gl_FragCoord.xy * 2.0 - iResolution.xy) / iResolution.y;
-          vec2 u0 = uv; // 保存原始坐标，用于计算最终的亮度衰减
+          vec2 u0 = uv; // 保存原始坐标用于遮罩
 
           // --- Configuration (参数调优) ---
-          // 想要变成更像“丝绸”还是“水草”，主要调这里
           float speed = 0.5;      // 摆动速度
-          float density = 8.0;    // 线条的密度
-          int iterations = 5;     // 叠加层数（越多越复杂，但性能开销大）
+          float density = 8.0;    // 线条的基础密度
 
-          // --- 2. The "Silk" Loop (Iterative Domain Warping) ---
-          // 核心循环：不断扭曲 UV 坐标
-          // 每一次循环，坐标都会被加上一个基于当前坐标的正弦波偏移量
-          // 这模拟了流体一层带一层运动的效果
-          for (int i = 0; i < 5; i++) { // WebGL 循环次数最好是常数
+          // --- 2. Spindle Shape Shaping (纺锤形重映射) ---
+          // 使用 cos 来模拟自然的纺锤弧度。
+          // clamp 限制范围防止除零错误。
+          // uv.x * 1.2 控制纺锤的宽窄（数值越小纺锤越宽）
+          float shapeFactor = cos(clamp(uv.x * 1.2, -1.57, 1.57));
+
+          // 核心技巧：
+          // 将 UV.y 除以 shapeFactor。
+          // 当靠近中心时(shapeFactor接近1)，y坐标不变。
+          // 当靠近两端时(shapeFactor变小)，y坐标变大，纹理变得非常密集，产生视觉上的“收缩”感。
+          // + 0.2 是为了防止边缘完全拉丝到无限细，保留一点厚度。
+          uv.y /= (shapeFactor * shapeFactor + 0.1);
+
+          // --- 3. The "Silk" Loop (Iterative Domain Warping) ---
+          // 减少循环次数到 4，去除过多的高频噪点，让线条更顺滑
+          for (int i = 0; i < 4; i++) {
               float fi = float(i);
 
-              // Calculate a wave based on current UV and Time
-              // 这里的魔术数字 (1.0, 0.7, etc) 是为了打破对称性，让摆动看起来自然不重复
-              uv.x += 0.2 / (fi + 1.0) * sin(fi * 3.0 * uv.y + iTime * speed + 0.3 * fi) + 0.5;
-              uv.y += 0.1 / (fi + 1.0) * sin(fi * 3.0 * uv.x + iTime * speed * 1.2 + 0.3 * (fi + 10.0)) - 0.5;
+              // 调整摆动参数：
+              // 0.15 (原0.2) -> 减小振幅，让摆动更克制
+              // speed * 0.5 -> 让波动的传递稍微慢一点，显得更优雅
+              float offset = 0.15 / (fi + 1.0) * sin(fi * 3.0 * uv.y + iTime * speed + 0.3 * fi) + 0.5;
+
+              // 只对 X 做主要扭曲，对 Y 做轻微扭曲，保持纺锤的横向趋势
+              uv.x += offset;
+              uv.y += 0.1 / (fi + 1.0) * sin(fi * 4.0 * uv.x + iTime * speed * 0.8);
           }
 
-          // --- 3. Pattern Generation ---
-          // 经过上面的循环，uv 已经被扭曲得非常复杂了。
-          // 现在我们用这个扭曲后的 uv 来生成正弦条纹。
-
-          // sin(uv.x + uv.y) 生成波浪纹
-          // 乘上 density 控制疏密
+          // --- 4. Pattern Generation ---
+          // 生成波纹
           float pattern = sin(uv.x * density + uv.y * density);
 
-          // Make lines thinner and sharper (Seaweed/Silk strands)
-          // 通过 absolute 和 倒数，把正弦波变成一条条发光的“线”
+          // 锐化线条：使用 smoothstep 代替简单的倒数，边缘会更平滑抗锯齿
           pattern = abs(pattern);
-          pattern = 0.1 / pattern; // 类似于发光效果 (Glow)
+          pattern = 0.05 / max(pattern, 0.001); // max防止除0
 
-          // --- 4. Coloring ---
+          // 限制线条的最大亮度，防止过曝
+          pattern = min(pattern, 2.0);
 
-          // Base Color: Deep Sea Blue/Green (深海蓝绿)
+          // --- 5. Coloring ---
+          // Base Color: 你的深海蓝绿配色
           vec3 col = vec3(0.1, 0.6, 0.5);
 
-          // Add color variation based on the warped coordinates
-          // 让颜色随着扭曲变化，产生丝绸的反光感
-          col += vec3(0.2, 0.1, 0.4) * sin(uv.y);
+          // Color Variation: 让颜色随原始 Y 轴和扭曲后的 Y 轴变化
+          col += vec3(0.2, 0.1, 0.4) * sin(u0.y * 2.0 + uv.y);
 
-          // Apply the pattern brightness
+          // Apply Pattern
           col *= pattern;
 
-          // --- 5. Vignette & Fade (Optional) ---
-          // 让四周暗一点，聚焦中心
-          float vignette = 1.5 - length(u0);
-          col *= vignette;
+          // --- 6. Spindle Mask (形状遮罩) ---
+          // 这是最关键的一步：之前只是扭曲了坐标，现在要把不需要的部分“切掉”。
+          // 利用之前的 shapeFactor (基于cos的曲线) 来生成透明度。
+          // pow(..., 3.0) 用来调整边缘的硬度，让它两端渐变消失。
+          float mask = smoothstep(0.0, 1.0, shapeFactor);
+          mask = pow(mask, 3.0); // 增加对比度，让纺锤更尖锐
+
+          // 额外添加一点基于 Y 轴的衰减，防止上下溢出屏幕太多
+          //float vFade = 1.0 - smoothstep(0.5, 1.0, abs(u0.y));
+
+          col *= mask;// * vFade;
 
           // Output
           gl_FragColor = vec4(col, 1.0);
