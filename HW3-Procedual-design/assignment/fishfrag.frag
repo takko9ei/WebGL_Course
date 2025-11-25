@@ -19,6 +19,9 @@ vec3 getFinPattern(vec2 uv, vec3 mainCol, vec3 subCol, float density, float rot,
               uv.x += offset;
               uv.y += 0.1 / (fi + 1.0) * sin(fi * 4.0 * uv.x + iTime * speed * 0.8);
     }
+    mat2 rotMat = mat2(cos(rot), sin(rot), -sin(rot), cos(rot));
+    uv = rotMat * uv;
+    uv += st;
     float pattern = sin(uv.x * density + uv.y * density);
     pattern = abs(pattern);
     pattern = 0.05 / max(pattern, 0.001); // max防止除0
@@ -141,7 +144,7 @@ void main() {
     vec3 color_body     = vec3(1.0, 0.4, 0.2); 
     vec3 color_backfin  = vec3(0.8, 0.1, 0.1); 
     vec3 color_bellyfin = vec3(0.2, 0.6, 1.0); 
-    vec3 color_tail     = getFinPattern(centcoord,vec3(0.1, 0.6, 0.5),vec3(0.0, 0.0, 0.0),8.0,0.0,vec2(0.0,0.0),u_time);
+    vec3 color_tail     = getFinPattern(centcoord,vec3(0.1, 0.6, 0.5),vec3(0.0, 0.0, 0.0),18.0,0.0,vec2(0.0,0.0),u_time);
     vec2 uv = centcoord;
     // --- 1. THE HEAD (ID:0) ---
     vec2 p0 = centcoord - vec2(0.300, -0.080);
