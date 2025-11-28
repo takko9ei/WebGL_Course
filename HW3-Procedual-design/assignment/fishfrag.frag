@@ -296,8 +296,17 @@ vec3 getWavePattern(vec2 uv, vec3 mainCol, vec3 subCol, float scale, float iTime
 
 void main() {
     vec2 st = gl_FragCoord.xy / u_resolution.xy;
+
+    // st: left bottom (0,0) to right top (1,1), linear
+    // we need x be distorted, y be linear
+    //用x的x坐标控制x的拉伸
+    float xScaleFactor = remap(sin(u_time),-1.0,1.0,0.0,2.0);
+    //st.x*=xScaleFactor;
     
     vec2 centcoord = st * 2.0 - 1.0;
+
+    // centcoord: left bottom (-1,-1) to right top (1,1), linear
+
     vec3 color_body = getBodyPattern(centcoord,vec3(0.4314, 0.1765, 0.502), vec3(0.2, 0.7, 0.8), vec3(0.3765, 0.1608, 0.8039),1.952,2.032, u_time); 
     vec3 color_backfin = getFinPattern(centcoord,vec3(0.1608, 0.5961, 0.7843),vec3(0.3451, 0.0235, 0.0235),23.0,-0.192,vec2(-0.200,0.590),1.128,u_time);
     vec3 color_bellyfin = getFinPattern(centcoord,vec3(0.1647, 0.5686, 0.8784),vec3(0.3451, 0.0235, 0.0235),21.0,-0.856,vec2(0.480,0.630),1.80,u_time);
