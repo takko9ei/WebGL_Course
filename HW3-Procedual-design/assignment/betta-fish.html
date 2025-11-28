@@ -37,24 +37,16 @@
         alert("WebGL2 not supported in this browser.");
         throw new Error("WebGL2 not supported");
       }
-      // Clear with a dark gray
       gl.clearColor(0, 0, 0, 1);
       gl.clear(gl.COLOR_BUFFER_BIT);
       //#endregion
 
       //#region shader
-
-      // --- REFACTORED VERTEX SHADER ---
-      // Now outputs standard Normalized Device Coordinates (NDC) [-1, 1]
       const vsSource = `#version 300 es
       in vec2 position;
-      
       void main() {
         gl_Position = vec4(position, 0.0, 1.0);
       }`;
-
-      // --- REFACTORED FRAGMENT SHADER ---
-      // All constants have been re-calculated to fit the new [-1, 1] scale.
       const fsSource = `#version 300 es
 #define PI 3.14159265
 #define E 2.71828
@@ -237,6 +229,8 @@ float sDiffCubic( float d1, float d2, float k )
     return max( d1, -d2 ) + h*h*h*k*(1.0/6.0);
 }
 
+//input: 1d distance and 3d color. 
+//this function returns the smooth union of d(sdf result) and color
 vec4 sUnion(vec4 d1_c1, vec4 d2_c2, float k) {
     float h = clamp( 0.5 + 0.5 * (d1_c1.x - d2_c2.x) / k, 0.0, 1.0 );
     float dist = sMinCubic(d1_c1.x, d2_c2.x, k);
@@ -348,11 +342,74 @@ vec3 getWavePattern(vec2 uv, vec3 mainCol, vec3 subCol, float scale, float iTime
 
     return clamp(final_color, 0.0, 1.0);
 }
+// --- New Function: Water Ripple Effect based on your reference ---
+// Adapt the HLSL logic to GLSL
+vec2 getWaterRipple(vec2 uv, vec2 center, float time) {
+    // 1. Calculate vector from current pixel to the ripple center
+    // HLSL: float2 dv = center - i.uv;
+    vec2 dv = center - uv;
+
+    // 2. Calculate distance
+    // HLSL: float dis = sqrt(...)
+    float dis = length(dv);
+
+    // 3. Ripple parameters (You can tweak these)
+    float frequency = 15.0;  // Corresponds to _Ctor (How dense the rings are)
+    float speed = 5.0;       // Corresponds to _timeCtor (How fast they move)
+    float maxRadius = 1.2;   // Corresponds to _max_dis (Ripple range)
+    float amplitude = 0.03;  // Strength of the distortion
+
+    // 4. Calculate Sine Factor (The wave)
+    // HLSL: sin(dis * _Ctor + _Time.y * _timeCtor)
+    // Note: Usually "- time" looks like expanding waves, "+ time" looks like imploding.
+    float sinFactor = sin(dis * frequency - time * speed);
+
+    // 5. Calculate Damping/Falloff
+    // HLSL: max(0, _max_dis - dis)
+    // Limits the effect to a specific radius and fades it out at the edges
+    float damp = max(0.0, maxRadius - dis);
+    
+    // Optional: Add extra smoothness to the edge
+    damp = pow(damp, 2.0); 
+
+    // 6. Calculate Direction
+    // HLSL: normalize(dv)
+    vec2 dir = normalize(dv);
+    
+    // Safety check to avoid NaN when uv is exactly at center
+    if (dis < 0.0001) dir = vec2(0.0); 
+
+    // 7. Final Offset
+    // HLSL: dv1 * sinFactor * max(...) * step(...)
+    // We multiply by 'amplitude' to control strength
+    return dir * sinFactor * damp * amplitude;
+}
 
 void main() {
     vec2 st = gl_FragCoord.xy / u_resolution.xy;
+
+    // st: left bottom (0,0) to right top (1,1), linear
+    // we need x be distorted, y be linear
+    //用x的x坐标控制x的拉伸
+    float xScaleFactor = remap(sin(u_time),-1.0,1.0,0.0,2.0);
+    //st.x*=xScaleFactor;
     
     vec2 centcoord = st * 2.0 - 1.0;
+
+    vec2 mouse_uv = u_mouse.xy / u_resolution.xy;
+    vec2 rippleCenter = mouse_uv * 2.0 - 1.0;
+    
+    // Option B: Fixed center (e.g., (0,0)) if mouse is not active
+    if (u_mouse.x < 10.0) { rippleCenter = vec2(0.0, 0.0); }
+
+    // Calculate the offset
+    vec2 rippleOffset = getWaterRipple(centcoord, rippleCenter, u_time);
+
+    // Apply the offset to the coordinate system
+    centcoord += rippleOffset;
+
+    // centcoord: left bottom (-1,-1) to right top (1,1), linear
+
     vec3 color_body = getBodyPattern(centcoord,vec3(0.4314, 0.1765, 0.502), vec3(0.2, 0.7, 0.8), vec3(0.3765, 0.1608, 0.8039),1.952,2.032, u_time); 
     vec3 color_backfin = getFinPattern(centcoord,vec3(0.1608, 0.5961, 0.7843),vec3(0.3451, 0.0235, 0.0235),23.0,-0.192,vec2(-0.200,0.590),1.128,u_time);
     vec3 color_bellyfin = getFinPattern(centcoord,vec3(0.1647, 0.5686, 0.8784),vec3(0.3451, 0.0235, 0.0235),21.0,-0.856,vec2(0.480,0.630),1.80,u_time);
@@ -441,14 +498,63 @@ void main() {
 
     float mask_eye = step(length(centcoord - vec2(0.800, 0.53)) , 0.0450);
     mask_eye = remap(mask_eye, 0.0, 1.0, 1.0, 0.0);
+    float mask_eye_highlight = step(length(centcoord - vec2(0.790, 0.54)) , 0.01);
+    //mask_eye_highlight = remap(mask_eye_highlight, 0.0, 1.0, 1.0, 0.0);
     //temp cancel
     
     // Output color
+    //colour_out = vec4(current_res.yzw,1.0);
     colour_out = mask * vec4(current_res.yzw, 1.0)+ (1.0 - mask) * vec4(color_water, 1.0);
+    //the most violent way to draw eye
+    colour_out.xyz = colour_out.xyz * mask_eye;
+    colour_out.xyz += mask_eye_highlight * vec3(1.0, 1.0, 1.0);
+    colour_out = clamp(colour_out, 0.0, 1.0);
 }
+
 `;
 
-      // --- SHADER COMPILATION HELPERS ---
+      const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+      gl.useProgram(shaderProgram);
+      //#endregion
+
+      //#region geometry
+      const posIn = gl.getAttribLocation(shaderProgram, "position");
+      // Full screen quad: x,y from -1 to 1
+      const vertices = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
+
+      const vao = gl.createVertexArray();
+      const vbo = gl.createBuffer();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(posIn);
+      gl.vertexAttribPointer(posIn, 2, gl.FLOAT, false, 0, 0);
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      //#endregion
+
+      const uResolutionLoc = gl.getUniformLocation(
+        shaderProgram,
+        "u_resolution"
+      );
+      const uTimeLoc = gl.getUniformLocation(shaderProgram, "u_time");
+      const uMouseLoc = gl.getUniformLocation(shaderProgram, "u_mouse");
+      let mouseX = 0;
+      let mouseY = 0;
+      requestAnimationFrame(draw);
+
+      function draw(time) {
+        time *= 0.001;
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.bindVertexArray(vao);
+        gl.uniform2f(uResolutionLoc, canvas.width, canvas.height);
+        gl.uniform1f(uTimeLoc, time);
+        gl.uniform2f(uMouseLoc, mouseX, mouseY);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        requestAnimationFrame(draw);
+      }
+
+      // helpers
       function compileShader(ingl, type, source) {
         const shader = ingl.createShader(type);
         ingl.shaderSource(shader, source);
@@ -480,41 +586,30 @@ void main() {
         return prog;
       }
 
-      const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
-      gl.useProgram(shaderProgram);
-      //#endregion
+      function updateMousePosition(canvas, event) {
+        // 1. 获取 Canvas 在浏览器视口中的位置和 CSS 尺寸 (700x700)
+        const rect = canvas.getBoundingClientRect();
 
-      //#region geometry
-      const posIn = gl.getAttribLocation(shaderProgram, "position");
-      // Full screen quad: x,y from -1 to 1
-      const vertices = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
+        // 2. 计算 Canvas 内部像素 (2100) 与 CSS 像素 (700) 的比例
+        // 在你的设置下，scaleX 和 scaleY 应该都等于 3.0
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
 
-      const vao = gl.createVertexArray();
-      const vbo = gl.createBuffer();
-      gl.bindVertexArray(vao);
-      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-      gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
-      gl.enableVertexAttribArray(posIn);
-      gl.vertexAttribPointer(posIn, 2, gl.FLOAT, false, 0, 0);
-      gl.bindVertexArray(null);
-      gl.bindBuffer(gl.ARRAY_BUFFER, null);
-      //#endregion
+        // 3. 获取鼠标相对于 Canvas CSS 边界的坐标 (0 ~ 700)
+        // event.clientX 是鼠标相对于视口的坐标
+        const cssX = event.clientX - rect.left;
+        const cssY = event.clientY - rect.top;
 
-      requestAnimationFrame(draw);
-
-      function draw(time) {
-        time *= 0.001;
-        gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.bindVertexArray(vao);
-        gl.uniform2f(
-          gl.getUniformLocation(shaderProgram, "u_resolution"),
-          canvas.width,
-          canvas.height
-        );
-        gl.uniform1f(gl.getUniformLocation(shaderProgram, "u_time"), time);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-        requestAnimationFrame(draw);
+        // 4. 映射到 Canvas 内部像素坐标 (0 ~ 2100)
+        // 并处理 WebGL 的 Y 轴翻转 (WebGL 原点在左下，DOM 在左上)
+        mouseX = cssX * scaleX;
+        mouseY = canvas.height - cssY * scaleY;
       }
+
+      // 事件监听
+      canvas.addEventListener("mousemove", (e) => {
+        updateMousePosition(canvas, e);
+      });
     </script>
   </body>
 </html>

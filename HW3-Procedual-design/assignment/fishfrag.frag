@@ -28,20 +28,17 @@ float getRuffleNoise(float angle, float time,float noiseScale) {
 }
 
 vec3 getBodyPattern(vec2 uv, vec3 baseCol, vec3 scaleCol, vec3 hintCol, float scale, float rot, float iTime){
-    // --- 1. 几何计算 (修改版) ---
+    // geo calc
     mat2 rotMat = mat2(cos(rot), -sin(rot), sin(rot), cos(rot));
     vec2 st = rotMat * uv;
     
-    // [关键修改]：降低密度，从 15.0 降到 6.0，让鳞片变大
     st *= scale * 7.0; 
-
-    // 错位逻辑保持不变
     st.x += step(1.0, mod(st.y, 2.0)) * 0.5;
     
     vec2 cell_uv = fract(st);
     cell_uv.y = remap(cell_uv.y, 0.0, 1.0, 0.0, 0.65); // 将 y 方向压缩为等边三角形高度比例
 
-    // 计算距离
+    // dist
     float d = length(cell_uv - vec2(0.5, 0.0));
     
     float scale_shape = smoothstep(0.65, 0.45, d); 
@@ -49,11 +46,10 @@ vec3 getBodyPattern(vec2 uv, vec3 baseCol, vec3 scaleCol, vec3 hintCol, float sc
     // thickness
     float shadow = smoothstep(0.2, 0.45, d);
 
-    // --- 3. 颜色混合 ---
+    // color mix
     vec3 base_color = baseCol; 
-    vec3 scale_color = scaleCol; // 鳞片本体颜色
+    vec3 scale_color = scaleCol;
     
-    // 动态偏光
     vec3 iridescent = hintCol * sin(uv.y * 5.0 + iTime*5.0 * 0.5);
 
     // 混合：底色 + 鳞片形状 * (鳞片色 + 偏光)
@@ -293,6 +289,48 @@ vec3 getWavePattern(vec2 uv, vec3 mainCol, vec3 subCol, float scale, float iTime
 
     return clamp(final_color, 0.0, 1.0);
 }
+// --- New Function: Water Ripple Effect based on your reference ---
+// Adapt the HLSL logic to GLSL
+vec2 getWaterRipple(vec2 uv, vec2 center, float time) {
+    // 1. Calculate vector from current pixel to the ripple center
+    // HLSL: float2 dv = center - i.uv;
+    vec2 dv = center - uv;
+
+    // 2. Calculate distance
+    // HLSL: float dis = sqrt(...)
+    float dis = length(dv);
+
+    // 3. Ripple parameters (You can tweak these)
+    float frequency = 15.0;  // Corresponds to _Ctor (How dense the rings are)
+    float speed = 5.0;       // Corresponds to _timeCtor (How fast they move)
+    float maxRadius = 1.2;   // Corresponds to _max_dis (Ripple range)
+    float amplitude = 0.03;  // Strength of the distortion
+
+    // 4. Calculate Sine Factor (The wave)
+    // HLSL: sin(dis * _Ctor + _Time.y * _timeCtor)
+    // Note: Usually "- time" looks like expanding waves, "+ time" looks like imploding.
+    float sinFactor = sin(dis * frequency - time * speed);
+
+    // 5. Calculate Damping/Falloff
+    // HLSL: max(0, _max_dis - dis)
+    // Limits the effect to a specific radius and fades it out at the edges
+    float damp = max(0.0, maxRadius - dis);
+    
+    // Optional: Add extra smoothness to the edge
+    damp = pow(damp, 2.0); 
+
+    // 6. Calculate Direction
+    // HLSL: normalize(dv)
+    vec2 dir = normalize(dv);
+    
+    // Safety check to avoid NaN when uv is exactly at center
+    if (dis < 0.0001) dir = vec2(0.0); 
+
+    // 7. Final Offset
+    // HLSL: dv1 * sinFactor * max(...) * step(...)
+    // We multiply by 'amplitude' to control strength
+    return dir * sinFactor * damp * amplitude;
+}
 
 void main() {
     vec2 st = gl_FragCoord.xy / u_resolution.xy;
@@ -304,6 +342,18 @@ void main() {
     //st.x*=xScaleFactor;
     
     vec2 centcoord = st * 2.0 - 1.0;
+
+    vec2 mouse_uv = u_mouse.xy / u_resolution.xy;
+    vec2 rippleCenter = mouse_uv * 2.0 - 1.0;
+    
+    // Option B: Fixed center (e.g., (0,0)) if mouse is not active
+    if (u_mouse.x < 10.0) { rippleCenter = vec2(0.0, 0.0); }
+
+    // Calculate the offset
+    vec2 rippleOffset = getWaterRipple(centcoord, rippleCenter, u_time);
+
+    // Apply the offset to the coordinate system
+    centcoord += rippleOffset;
 
     // centcoord: left bottom (-1,-1) to right top (1,1), linear
 
