@@ -6,11 +6,70 @@ uniform vec2 u_resolution;
 uniform float u_time;
 uniform vec2 u_mouse;
 
+// Function Definitions
+
 // SDF Functions
 // Chinese comment use UTF-8
-vec3 getFinPattern(vec2 uv, vec3 mainCol, vec3 subCol, float density, float rot, vec2 st, float iTime){
+
+float remap(float value, float origFrom, float origTo, float targetFrom, float targetTo) {
+    float normalizedValue = (value - origFrom) / (origTo - origFrom); // Normalize to [0, 1]
+    return targetFrom + (targetTo - targetFrom) * normalizedValue; // Map to target range
+}
+
+float getRuffleNoise(float angle, float time,float noiseScale) {
+    // numbers here has no special meaning, just random values
+    float noise = sin(angle * 8.3 + time * 2.0) * 0.5;
+    noise += sin(angle * 17.7 - time * 3.5) * 0.25;
+    noise += sin(angle * 37.9 + time * 4.5) * 0.125;
+    return noise * noiseScale; //the noise strength
+}
+
+vec3 getBodyPattern(vec2 uv, float scale, float rot){
+    // --- 1. 几何计算 (修改版) ---
+    mat2 rotMat = mat2(cos(rot), -sin(rot), sin(rot), cos(rot));
+    vec2 st = rotMat * uv;
+    
+    // [关键修改]：降低密度，从 15.0 降到 6.0，让鳞片变大
+    st *= scale * 6.0; 
+
+    // 错位逻辑保持不变
+    st.x += step(1.0, mod(st.y, 2.0)) * 0.5;
+    vec2 cell_uv = fract(st);
+
+    // 计算距离
+    float d = length(cell_uv - vec2(0.5, 0.0));
+
+    // --- 2. 视觉样式 (关键修改) ---
+    
+    // [去敏处理]：不要使用 sharp ring (空心环)。
+    // 使用 smoothstep 做成实心的重叠效果。
+    // 0.5 是边缘，小于 0.5 的部分稍微亮一点，模拟凸起感。
+    float scale_shape = smoothstep(0.55, 0.45, d); 
+    
+    // 增加一点厚度阴影
+    float shadow = smoothstep(0.45, 0.6, d);
+
+    // --- 3. 颜色混合 ---
+    vec3 base_color = vec3(0.1, 0.4, 0.6); 
+    vec3 scale_color = vec3(0.2, 0.7, 0.8); // 鳞片本体颜色
+    
+    // 动态偏光
+    vec3 iridescent = vec3(0.3, 0.2, 0.5) * sin(uv.y * 5.0 + u_time * 0.5);
+
+    // 混合：底色 + 鳞片形状 * (鳞片色 + 偏光)
+    // 减去 shadow 让边缘变暗，而不是变亮，这样看起来像凸起而不是孔洞
+    vec3 final_color = base_color + scale_shape * (scale_color + iridescent) - shadow * 0.2;
+
+    return clamp(final_color, 0.0, 1.0);
+}
+
+vec3 getFinPattern(vec2 uv, vec3 mainCol, vec3 subCol, float density, float rot, vec2 st, float scale, float iTime){
     vec2 u0 = uv;
     float speed = 0.5;
+    uv*=scale;
+    mat2 rotMat = mat2(cos(rot), sin(rot), -sin(rot), cos(rot));
+    uv = rotMat * uv;
+    uv -= st;
     float shapeFactor = cos(clamp(uv.x * 1.2, -1.57, 1.57));
     uv.y /= (shapeFactor * shapeFactor + 0.1);
     for (int i = 0; i < 4; i++) {
@@ -19,25 +78,22 @@ vec3 getFinPattern(vec2 uv, vec3 mainCol, vec3 subCol, float density, float rot,
               uv.x += offset;
               uv.y += 0.1 / (fi + 1.0) * sin(fi * 4.0 * uv.x + iTime * speed * 0.8);
     }
-    mat2 rotMat = mat2(cos(rot), sin(rot), -sin(rot), cos(rot));
-    uv = rotMat * uv;
-    uv += st;
+    
     float pattern = sin(uv.x * density + uv.y * density);
     pattern = abs(pattern);
-    pattern = 0.05 / max(pattern, 0.001); // max防止除0
+    pattern = 0.50 / max(pattern, 0.001); // max防止除0
+    pattern = pow(pattern,1.8);
     pattern = min(pattern, 2.0);
     vec3 col = mainCol;
     col += vec3(0.2, 0.1, 0.4) * sin(u0.y * 2.0 + uv.y);
     col *= pattern;
-    float mask = smoothstep(0.0, 1.0, shapeFactor);
+    float mask = smoothstep(0.0, 0.8, shapeFactor);
     mask = pow(mask, 3.0);
     //float vFade = 1.0 - smoothstep(0.5, 1.0, abs(u0.y));
 
     col *= mask;// * vFade;
     return col;
 }
-
-//float getBodyPattern
 
 float sdEgg( vec2 p, float he, float ra, float rb, float bu )
 {
@@ -52,14 +108,6 @@ float sdEgg( vec2 p, float he, float ra, float rb, float bu )
         return length(p+vec2(x,y))-r;
     return min( length(p)-ra,
                 length(vec2(p.x,p.y-he))-rb );
-}
-
-float getRuffleNoise(float angle, float time,float noiseScale) {
-    // numbers here has no special meaning, just random values
-    float noise = sin(angle * 8.3 + time * 2.0) * 0.5;
-    noise += sin(angle * 17.7 - time * 3.5) * 0.25;
-    noise += sin(angle * 37.9 + time * 4.5) * 0.125;
-    return noise * noiseScale; //the noise strength
 }
 
 float sdBettaTailShape( vec2 p, vec2 c, float r, float iTime )
@@ -141,10 +189,10 @@ vec4 sUnion(vec4 d1_c1, vec4 d2_c2, float k) {
 void main() {
     vec2 st = gl_FragCoord.xy / u_resolution.xy;
     vec2 centcoord = st * 2.0 - 1.0;
-    vec3 color_body     = vec3(1.0, 0.4, 0.2); 
-    vec3 color_backfin  = vec3(0.8, 0.1, 0.1); 
-    vec3 color_bellyfin = vec3(0.2, 0.6, 1.0); 
-    vec3 color_tail     = getFinPattern(centcoord,vec3(0.1, 0.6, 0.5),vec3(0.0, 0.0, 0.0),18.0,0.0,vec2(0.0,0.0),u_time);
+    vec3 color_body = getBodyPattern(centcoord,1.952,2.032); 
+    vec3 color_backfin = getFinPattern(centcoord,vec3(0.1, 0.6, 0.5),vec3(0.0, 0.0, 0.0),23.0,-0.192,vec2(-0.200,0.590),1.128,u_time);
+    vec3 color_bellyfin = getFinPattern(centcoord,vec3(0.1, 0.6, 0.5),vec3(0.0, 0.0, 0.0),21.0,-0.856,vec2(0.480,0.630),1.80,u_time);
+    vec3 color_tail = getFinPattern(centcoord,vec3(0.1, 0.6, 0.5),vec3(0.0, 0.0, 0.0),18.0,-0.416,vec2(-0.790,0.580),1.0,u_time);
     vec2 uv = centcoord;
     // --- 1. THE HEAD (ID:0) ---
     vec2 p0 = centcoord - vec2(0.300, -0.080);

@@ -7,6 +7,7 @@ uniform float u_time;
 uniform vec2 u_mouse;
 
 // Function Declarations
+float remap(float value, float origFrom, float origTo, float targetFrom, float targetTo);
 vec3 getFinPattern(vec2 uv, vec3 mainCol, vec3 subCol, float density, float rot, vec2 st, float scale, float iTime);
 vec3 getBodyPattern(vec2 uv, float scale, float rot);
 float sdEgg(vec2 p, float he, float ra, float rb, float bu);
@@ -116,6 +117,12 @@ void main() {
 
 // SDF Functions
 // Chinese comment use UTF-8
+
+float remap(float value, float origFrom, float origTo, float targetFrom, float targetTo) {
+    float normalizedValue = (value - origFrom) / (origTo - origFrom); // Normalize to [0, 1]
+    return targetFrom + (targetTo - targetFrom) * normalizedValue; // Map to target range
+}
+
 vec3 getFinPattern(vec2 uv, vec3 mainCol, vec3 subCol, float density, float rot, vec2 st, float scale, float iTime){
     vec2 u0 = uv;
     float speed = 0.5;
@@ -134,7 +141,8 @@ vec3 getFinPattern(vec2 uv, vec3 mainCol, vec3 subCol, float density, float rot,
     
     float pattern = sin(uv.x * density + uv.y * density);
     pattern = abs(pattern);
-    pattern = 0.05 / max(pattern, 0.001); // max防止除0
+    pattern = 0.50 / max(pattern, 0.001); // max防止除0
+    pattern = pow(pattern,1.8);
     pattern = min(pattern, 2.0);
     vec3 col = mainCol;
     col += vec3(0.2, 0.1, 0.4) * sin(u0.y * 2.0 + uv.y);
@@ -178,8 +186,10 @@ vec3 getBodyPattern(vec2 uv, float scale, float rot){
     // Create the glowing edge effect, similar to getFinPattern.
     // We use sin on the distance value. Where the distance creates a nice gradient (like 0, 1, 2...),
     // sin will create waves. The 1/abs(sin) trick creates bright lines at the zero-crossings.
-    float glow_pattern = 0.080 / max(abs(sin(d * 5.3)), 0.001);
+    float glow_pattern = 0.40 / max(abs(sin(d * 7.0)), 0.001);
+    glow_pattern = pow(glow_pattern, 1.7);
     glow_pattern = clamp(glow_pattern, 0.0, 1.0);
+    glow_pattern = remap(glow_pattern, 0.0,1.0,1.0,0.0);
 
     // Define a base color for the scales
     vec3 base_color = vec3(0.1, 0.5, 0.7); // A bluish-green
