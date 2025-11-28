@@ -62,11 +62,11 @@ vec2 voronoi(vec2 uv, float time) {
     return closest;
 }
 
-vec3 wave(vec2 uv, float scale, float iTime) {
-    vec2 scaled_uv = uv * scale * 6.0; // Scale to control wave size
+vec3 getWavePattern(vec2 uv, float scale, float iTime) {
+    vec2 scaledUV = uv * scale * 6.0; // Scale to control getWavePattern size
 
     // Get distances to the two nearest cell centers
-    vec2 dists = voronoi(scaled_uv, iTime);
+    vec2 dists = voronoi(scaledUV, iTime);
 
     // The first distance gives a nice gradient within the cell
     float cell_interior = dists.x;
@@ -76,16 +76,16 @@ vec3 wave(vec2 uv, float scale, float iTime) {
 
     // --- Coloring ---
     // Base color for the water, darker blue
-    vec3 water_color = vec3(0.0, 0.2, 0.5);
-    // Make the center of the wave polygons a bit brighter
-    water_color = mix(vec3(0.1, 0.4, 0.7), water_color, smoothstep(0.0, 0.4, cell_interior));
+    vec3 water_color = vec3(0.149, 0.4745, 0.6627);
+    // Make the center of the getWavePattern polygons a bit brighter
+    water_color = mix(vec3(0.1255, 0.3765, 0.6118), water_color, smoothstep(0.0, 0.4, cell_interior));
     
     // --- Sparkle & Bloom (with AA and Smoother Shimmer) ---
 
     // 1. Smoother, organic flicker mask
-    float flicker_noise_sample = noise(scaled_uv * 0.5 + iTime * 0.2);
+    float flicker_noise_sample = noise(scaledUV * 0.5 + iTime * 0.2);
     // Use a second, smoother noise for shimmer instead of a raw hash
-    float shimmer_noise = noise(scaled_uv * 1.5 + iTime * -0.5);
+    float shimmer_noise = noise(scaledUV * 1.5 + iTime * -0.5);
     float shimmer = (0.6 + 0.4 * sin(iTime * 8.0 + shimmer_noise * 6.28));
     
     float flicker_mask = mix(0.5, 1.0, flicker_noise_sample);
@@ -120,8 +120,8 @@ void main() {
     float scale = 1.0;
     float iTime = u_time;
 
-    // Get the wave color
-    vec3 final_color = wave(uv, scale, iTime);
+    // Get the getWavePattern color
+    vec3 final_color = getWavePattern(uv, scale, iTime);
 
     // Output final color
     colour_out = vec4(final_color, 1.0);
