@@ -130,30 +130,27 @@ float sdOrientedVesica( vec2 p, vec2 a, vec2 b, float w )
 
 float sdMoon(vec2 p, float d, float ra, float rb, float intensity, float iTime )
 {
-    // --- 步骤 A: 预处理对称性 ---
+    // 对称性
     // 原函数利用了上下对称性。这意味着我们的噪声也会随之上下对称（镜像）。
     // 如果想要非对称的噪声，需要修改这行代码的逻辑，但为了保持 SDF 算法的稳定性，
     // 我们暂时保留这个对称性，这意味着月亮咬痕的上下两半是镜像的。
     p.y = abs(p.y);
 
-    // --- 步骤 B: 计算相对于“小圆圆心”的角度 ---
+    // 相对小圆心角度
     // 小圆圆心在 (d, 0)。
     // 我们需要计算当前点 p 到 (d, 0) 的向量。
     vec2 relP = p - vec2(d, 0.0);
     
-    // 获取角度。atan(y, x) 返回弧度。
+    // 获取角度。atan(y, x) 返回弧度
     float angle = atan(relP.y, relP.x);
 
-    // --- 步骤 C: 计算扰动后的半径 ---
-    
-    // 这里的 rb 变成了变量。
+    //扰动后半径
+    // 这里的 rb 变成了变量
     // 注意：我们把 getNoise 的结果加到 rb 上
     float rbNoisy = rb + getRuffleNoise(angle,iTime, intensity);
 
-    // --- 步骤 D: 代入原公式 ---
-    // 关键点：原本公式中所有用到 rb 的地方，现在全部都要换成 rbNoisy
-    // 这样才能保证月亮的尖角 (intersection points) 计算是基于变形后的圆的
-    
+    //原本公式中所有用到 rb 的地方，现在全部都要换成 rbNoisy
+
     float a = (ra*ra - rbNoisy*rbNoisy + d*d)/(2.0*d);
     float b = sqrt(max(ra*ra-a*a,0.0));
     
@@ -178,7 +175,7 @@ float sDiffCubic( float d1, float d2, float k )
     return max( d1, -d2 ) + h*h*h*k*(1.0/6.0);
 }
 
-//input: 1d distance and 3d color. 
+//input: 1d distance and 3d color.
 //this function returns the smooth union of d(sdf result) and color
 vec4 sUnion(vec4 dc1, vec4 dc2, float k) {
     float h = clamp( 0.5 + 0.5 * (dc1.x - dc2.x) / k, 0.0, 1.0 );
@@ -193,44 +190,44 @@ float hash( vec2 p ) {
     return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
-// Smoothly interpolated noise function (Value Noise)
+//value noise
 float noise( vec2 x ) {
     vec2 i = floor(x);
     vec2 f = fract(x);
 
-    // Smoothstep for interpolation
+    //smoothstep for interpolation
     vec2 u = f*f*(3.0-2.0*f);
 
-    // Get random values for the 4 corners of the cell
+    //random values for the 4 corners of the cell
     float a = hash( i + vec2(0.0,0.0) );
     float b = hash( i + vec2(1.0,0.0) );
     float c = hash( i + vec2(0.0,1.0) );
     float d = hash( i + vec2(1.0,1.0) );
 
-    // Bilinearly interpolate
+    //bilinearly interpolate
     return mix(mix( a, b, u.x), mix( c, d, u.x), u.y);
 }
 
-// Returns the distances to the nearest and second-nearest cell centers
+//returns the distances to the nearest and second-nearest cell centers
 vec2 voronoi(vec2 uv, float time) {
     vec2 g = floor(uv); // Grid cell
     vec2 f = fract(uv); // Position within cell
     
     vec2 closest = vec2(1.0); // .x is dist to nearest, .y is dist to 2nd nearest
 
-    // Check 3x3 grid of cells around the current one
+    //check 3x3 grid of cells around the current one
     for (int y = -1; y <= 1; y++) {
         for (int x = -1; x <= 1; x++) {
             vec2 offset = vec2(x, y);
             vec2 cellPos = g + offset;
             
-            // Animate each cell point pseudo-randomly
+            // pseudo random anime
             float h = hash(cellPos);
             vec2 pointPos = 0.5 + 0.4 * vec2(sin(time * 0.7 + h * 6.28), cos(time * 0.7 + h * 6.28)); // 2*PI
             
             float dist = length(offset + pointPos - f);
 
-            // Update the two closest distances
+            //update two closest distances
             if (dist < closest.x) {
                 closest.y = closest.x;
                 closest.x = dist;
@@ -243,9 +240,8 @@ vec2 voronoi(vec2 uv, float time) {
 }
 
 vec3 getWavePattern(vec2 uv, vec3 mainCol, vec3 subCol, float scale, float iTime) {
-    vec2 scaledUV = uv * scale * 6.0; // Scale to control getWavePattern size
+    vec2 scaledUV = uv * scale * 6.0;
 
-    // Get distances to the two nearest cell centers
     vec2 dists = voronoi(scaledUV, iTime);
 
     // The first distance gives a nice gradient within the cell
@@ -254,64 +250,55 @@ vec3 getWavePattern(vec2 uv, vec3 mainCol, vec3 subCol, float scale, float iTime
     // The difference between the two distances defines the cell edge
     float edgeDistance = dists.y - dists.x;
 
-    // --- Coloring ---
-    // Base color for the water, darker blue
     vec3 waterColor = mainCol;
-    // Make the center of the getWavePattern polygons a bit brighter
     waterColor = mix(subCol, waterColor, smoothstep(0.0, 0.4, cellInterior));
-    
-    // --- Sparkle & Bloom (with AA and Smoother Shimmer) ---
 
-    // 1. Smoother, organic flicker mask
+    //flicker mask
     float flickerNoiseSample = noise(scaledUV * 0.5 + iTime * 0.2);
-    // Use a second, smoother noise for shimmer instead of a raw hash
+    //a second, smoother noise for shimmer instead of a raw hash
     float shimmerNoise = noise(scaledUV * 1.5 + iTime * -0.5);
     float shimmer = (0.6 + 0.4 * sin(iTime * 8.0 + shimmerNoise * 6.28));
     
     float flickerMask = mix(0.5, 1.0, flickerNoiseSample);
     flickerMask *= shimmer;
 
-    // 2. Anti-aliased Bloom effect
+    //bloom effect
     float edgeWidth = fwidth(edgeDistance) * 1.5; // Get pixel width for AA
-    // Sharp core with AA
+    //sharp core
     float sharpGlow = pow(1.0 - smoothstep(0.0, edgeWidth * 2.0, edgeDistance), 40.0);
-    // Softer bloom with AA
+    //softer bloom
     float softGlow = pow(1.0 - smoothstep(0.0, edgeWidth * 8.0, edgeDistance), 10.0);
 
-    // Combine the bloom layers
+    //combine the bloom layers
     float totalBloom = sharpGlow * 1.0 + softGlow * 0.3;
 
-    // 3. Combine bloom with the flicker mask
+    //combine bloom with the flicker mask
     float sparkle = totalBloom * flickerMask;
     
     vec3 sparkleColor = vec3(0.9, 1.0, 1.0);
     
-    // Combine water color with the sparkling highlights
+    //combine water color with the sparkling highlights
     vec3 finalColor = waterColor + sparkle * sparkleColor;
 
     return clamp(finalColor, 0.0, 1.0);
 }
-// --- New Function: Water Ripple Effect based on your reference ---
-vec2 getWaterRipple(vec2 uv, vec2 center, float time) {
-    // 1. Calculate vector from current pixel to the ripple center
-    // HLSL: float2 dv = center - i.uv;
-    vec2 dv = center - uv;
 
-    // 2. Calculate distance
+vec2 getWaterRipple(vec2 uv, vec2 center, float time) {
+    vec2 dv = center - uv;
     float dis = length(dv);
 
     //ripple parameters
-    float frequency = 15.0;  // Corresponds to _Ctor (How dense the rings are)
-    float speed = 5.0;       // Corresponds to _timeCtor (How fast they move)
-    float maxRadius = 1.2;   // Corresponds to _max_dis (Ripple range)
-    float amplitude = 0.03;  // Strength of the distortion
+    float frequency = 15.0;
+    float speed = 5.0;
+    float maxRadius = 1.2;
+    float amplitude = 0.03;
 
-    // 4. Calculate Sine Factor (The wave)
-    // Note: Usually "- time" looks like expanding waves, "+ time" looks like imploding.
+    //sine Factor (The wave)
+    //usually "- time" looks like expanding waves, "+ time" looks like imploding.
     float sinFactor = sin(dis * frequency - time * speed);
 
-    // 5. Calculate Damping/Falloff
-    // Limits the effect to a specific radius and fades it out at the edges
+    //damping/Falloff
+    //limits the effect to a specific radius and fades it out at the edges
     float damp = max(0.0, maxRadius - dis);
     
     damp = pow(damp, 2.0); 
@@ -327,27 +314,18 @@ vec2 getWaterRipple(vec2 uv, vec2 center, float time) {
 
 void main() {
     vec2 st = gl_FragCoord.xy / u_resolution.xy;
-
     // st: left bottom (0,0) to right top (1,1), linear
-    // we need x be distorted, y be linear
-    //用x的x坐标控制x的拉伸
-    float xScaleFactor = remap(sin(u_time),-1.0,1.0,0.0,2.0);
-    //st.x*=xScaleFactor;
     
     vec2 centcoord = st * 2.0 - 1.0;
 
     vec2 mousePos = u_mouse.xy / u_resolution.xy;
     vec2 rippleCenter = mousePos * 2.0 - 1.0;
-    
-    // Option B: Fixed center (e.g., (0,0)) if mouse is not active
-    if (u_mouse.x < 10.0) { rippleCenter = vec2(0.0, 0.0); }
 
-    // Calculate the offset
+    //calculate the offset
     vec2 rippleOffset = getWaterRipple(centcoord, rippleCenter, u_time);
 
-    // Apply the offset to the coordinate system
+    //apply offset
     centcoord += rippleOffset;
-
     // centcoord: left bottom (-1,-1) to right top (1,1), linear
 
     vec3 bodyColor = getBodyPattern(centcoord,vec3(0.4314, 0.1765, 0.502), vec3(0.2, 0.7, 0.8), vec3(0.3765, 0.1608, 0.8039),1.952,2.032, u_time); 
@@ -417,38 +395,38 @@ void main() {
 
     //we use xxCore for and ONLY for clipping redundant d of fin
     float dBodyCore = dHeadbody + clipMargin;
-    float d_tail_core = dTail + clipMargin-0.1;
+    float dTailCore = dTail + clipMargin-0.1;
 
     dBackfin = sDiffCubic(dBackfin, dBodyCore, 0.02);
     dBellyfin = sDiffCubic(dBellyfin, dBodyCore, 0.02);
     dBellyfin = sDiffCubic(dBellyfin, d3, 0.02);
-    dBellyfin = sDiffCubic(dBellyfin,d_tail_core,0.02);
+    dBellyfin = sDiffCubic(dBellyfin,dTailCore,0.02);
 
-    vec4 current_res = vec4(dHeadbody, bodyColor);
-    current_res = sUnion(current_res, vec4(dBackfin, backfinColor), finK);
-    current_res = sUnion(current_res, vec4(dBellyfin, bellyfinColor), finK);
+    vec4 tempRes = vec4(dHeadbody, bodyColor);
+    tempRes = sUnion(tempRes, vec4(dBackfin, backfinColor), finK);
+    tempRes = sUnion(tempRes, vec4(dBellyfin, bellyfinColor), finK);
 
     if(dBackfin<0.0&&dTail<0.01){
-        current_res.yzw = tailColor;
+        tempRes.yzw = tailColor;
     }
 
-    current_res = sUnion(current_res,vec4(dTail,tailColor), finK);
+    tempRes = sUnion(tempRes,vec4(dTail,tailColor), finK);
 
-    float d_final = current_res.x;
+    float dFinal = tempRes.x;
 
-    float mask = step(d_final,0.0);
+    float mask = step(dFinal,0.0);
 
-    float mask_eye = step(length(centcoord - vec2(0.800, 0.53)) , 0.0450);
-    mask_eye = remap(mask_eye, 0.0, 1.0, 1.0, 0.0);
-    float mask_eye_highlight = step(length(centcoord - vec2(0.790, 0.54)) , 0.01);
-    //mask_eye_highlight = remap(mask_eye_highlight, 0.0, 1.0, 1.0, 0.0);
+    float eyeMask = step(length(centcoord - vec2(0.800, 0.53)) , 0.0450);
+    eyeMask = remap(eyeMask, 0.0, 1.0, 1.0, 0.0);
+    float eyeMaskHighlight = step(length(centcoord - vec2(0.790, 0.54)) , 0.01);
+    //eyeMaskHighlight = remap(eyeMaskHighlight, 0.0, 1.0, 1.0, 0.0);
     //temp cancel
     
     // Output color
-    //colour_out = vec4(current_res.yzw,1.0);
-    colour_out = mask * vec4(current_res.yzw, 1.0)+ (1.0 - mask) * vec4(waterColor, 1.0);
+    //colour_out = vec4(tempRes.yzw,1.0);
+    colour_out = mask * vec4(tempRes.yzw, 1.0)+ (1.0 - mask) * vec4(waterColor, 1.0);
     //the most violent way to draw eye
-    colour_out.xyz = colour_out.xyz * mask_eye;
-    colour_out.xyz += mask_eye_highlight * vec3(1.0, 1.0, 1.0);
+    colour_out.xyz = colour_out.xyz * eyeMask;
+    colour_out.xyz += eyeMaskHighlight * vec3(1.0, 1.0, 1.0);
     colour_out = clamp(colour_out, 0.0, 1.0);
 }
