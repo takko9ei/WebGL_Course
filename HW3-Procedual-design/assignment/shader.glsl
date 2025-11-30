@@ -1,6 +1,11 @@
 #version 300 es
 #define PI 3.14159265
-#define E 2.71828
+#define E 2.71828183
+
+//Author Informations
+//Author: LI Zhuohang, 5125EG13-0, use ameato9ei as my pseudonym if possible;)
+//Fish Name: TryMouseInteractOnMeFish
+//For html file, refer to 
 
 precision mediump float;
 
@@ -9,11 +14,10 @@ uniform vec2 u_resolution;
 uniform float u_time;
 uniform vec2 u_mouse;
 
+// NOTICE: Chinese comment use UTF-8
+
 // Function Definitions
-
 // SDF Functions
-// Chinese comment use UTF-8
-
 float remap(float value, float origFrom, float origTo, float targetFrom, float targetTo) {
     float normalizedValue = (value - origFrom) / (origTo - origFrom);
     return targetFrom + (targetTo - targetFrom) * normalizedValue;
