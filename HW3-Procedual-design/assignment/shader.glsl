@@ -5,7 +5,7 @@
 //Author Informations
 //Author: LI Zhuohang, 5125EG13-0, use ameato9ei as my pseudonym if possible;)
 //Fish Name: TryMouseInteractOnMeFish
-//For html file, refer to 
+//For complete html file, refer to github: https://github.com/takko9ei/WebGL_Course/blob/main/HW3-Procedual-design/assignment/betta-fish.html
 
 precision mediump float;
 
