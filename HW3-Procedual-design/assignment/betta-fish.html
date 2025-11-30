@@ -1,0 +1,584 @@
+<html>
+  <head>
+    <!-- This is individual project, in Advanced Computer Graphics, in Waseda Univ.
+    Author: ameato9ei (LI Zhuohang)
+    Chinese comment using utf8 encoding -->
+    <meta charset="UTF-8" />
+    <style>
+      html {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #f1f2eb;
+        height: 100%;
+      }
+      canvas {
+        /* CSS Display Size */
+        width: 700px;
+        height: 700px;
+        border-radius: 32px;
+        box-shadow: 10px 10px 10px 6px rgba(56, 56, 59, 0.3);
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="myCanvas" width="2100" height="2100"> </canvas>
+    <!-- canvas width is for super sampling anti aliasing -->
+    <script>
+      //#region glsetup
+      /** @type {HTMLCanvasElement} */
+      const canvas = document.getElementById("myCanvas");
+
+      /** @type {WebGL2RenderingContext} */
+      const gl = canvas.getContext("webgl2");
+
+      if (!gl) {
+        alert("WebGL2 not supported in this browser.");
+        throw new Error("WebGL2 not supported");
+      }
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      //#endregion
+
+      //#region shader
+      const vsSource = `#version 300 es
+      in vec2 position;
+      void main() {
+        gl_Position = vec4(position, 0.0, 1.0);
+      }`;
+      const fsSource = `#version 300 es
+#define PI 3.14159265
+#define E 2.71828
+
+precision mediump float;
+
+out vec4 colour_out;
+uniform vec2 u_resolution;
+uniform float u_time;
+uniform vec2 u_mouse;
+
+// NOTICE: Chinese comment use UTF-8
+
+// Function Definitions
+// SDF Functions
+float remap(float value, float origFrom, float origTo, float targetFrom, float targetTo) {
+    float normalizedValue = (value - origFrom) / (origTo - origFrom);
+    return targetFrom + (targetTo - targetFrom) * normalizedValue;
+}
+
+float getRuffleNoise(float angle, float time,float noiseScale) {
+    // numbers here has no special meaning, just random values
+    float noise = sin(angle * 8.3 + time * 2.0) * 0.5;
+    noise += sin(angle * 17.7 - time * 3.5) * 0.25;
+    noise += sin(angle * 37.9 + time * 4.5) * 0.125;
+    return noise * noiseScale; //the noise strength
+}
+
+vec3 getBodyPattern(vec2 uv, vec3 baseCol, vec3 scaleCol, vec3 hintCol, float scale, float rot, float iTime){
+    // geo calc
+    mat2 rotMat = mat2(cos(rot), -sin(rot), sin(rot), cos(rot));
+    vec2 st = rotMat * uv;
+    
+    st *= scale * 7.0; 
+    st.x += step(1.0, mod(st.y, 2.0)) * 0.5;
+    
+    vec2 cellUV = fract(st);
+    cellUV.y = remap(cellUV.y, 0.0, 1.0, 0.0, 0.65); // 将 y 方向压缩为等边三角形高度比例
+
+    // dist
+    float d = length(cellUV - vec2(0.5, 0.0));
+    
+    float scaleShape = smoothstep(0.65, 0.45, d); 
+    
+    // thickness
+    float shadow = smoothstep(0.2, 0.45, d);
+
+    // color mix
+    vec3 baseColor = baseCol; 
+    vec3 scaleColor = scaleCol;
+    
+    vec3 iridescent = hintCol * sin(uv.y * 5.0 + iTime*5.0 * 0.5);
+
+    // 混合：底色 + 鳞片形状 * (鳞片色 + 偏光)
+    // 减去 shadow 让边缘变暗，而不是变亮，这样看起来像凸起而不是孔洞
+    vec3 finalColor = baseColor + scaleShape * (scaleColor + iridescent) - shadow * 0.2;
+
+    return clamp(finalColor, 0.0, 1.0);
+}
+
+vec3 getFinPattern(vec2 uv, vec3 mainCol, vec3 subCol, float density, float rot, vec2 st, float scale, float iTime){
+    vec2 u0 = uv;
+    float speed = 0.5;
+    uv*=scale;
+    mat2 rotMat = mat2(cos(rot), sin(rot), -sin(rot), cos(rot));
+    uv = rotMat * uv;
+    uv -= st;
+    float shapeFactor = cos(clamp(uv.x * 1.2, -1.57, 1.57));
+    uv.y /= (shapeFactor * shapeFactor + 0.1);
+    for (int i = 0; i < 4; i++) {
+              float fi = float(i);
+              float offset = 0.15 / (fi + 1.0) * sin(fi * 3.0 * uv.y + iTime * speed + 0.3 * fi) + 0.5;
+              uv.x += offset;
+              uv.y += 0.1 / (fi + 1.0) * sin(fi * 4.0 * uv.x + iTime * speed * 0.8);
+    }
+    
+    float pattern = sin(uv.x * density + uv.y * density);
+    pattern = abs(pattern);
+    pattern = 0.50 / max(pattern, 0.001); // max防止除0
+    pattern = pow(pattern,1.8);
+    pattern = min(pattern, 2.0);
+    vec3 col = mainCol;
+    col += vec3(0.2, 0.1, 0.4) * sin(u0.y * 2.0 + uv.y);
+    col *= pattern;
+    col += subCol * (1.0 - pattern);
+    float mask = smoothstep(0.0, 0.8, shapeFactor);
+    mask = pow(mask, 3.0);
+    //float vFade = 1.0 - smoothstep(0.5, 1.0, abs(u0.y));
+
+    col *= mask;// * vFade;
+    return col;
+}
+
+float sdEgg( vec2 p, float he, float ra, float rb, float bu )
+{
+    float r = 0.5*(he + ra+rb)/bu;
+    float da = r - ra;
+    float db = r - rb;
+    float y = (db*db - da*da - he*he)/(2.0*he);
+    float x = sqrt(da*da - y*y);
+    p.x = abs(p.x);
+    float k = p.y*x - p.x*y;
+    if( k>0.0 && k<he*(p.x+x) )
+        return length(p+vec2(x,y))-r;
+    return min( length(p)-ra,
+                length(vec2(p.x,p.y-he))-rb );
+}
+
+float sdBettaTailShape( vec2 p, vec2 c, float r, float iTime )
+{
+    float angle = atan(p.y, p.x);
+    float ruffleOffset = getRuffleNoise(angle, iTime,0.12) * r;
+    p.x = abs(p.x);
+    float l = length(p) - (r + ruffleOffset);
+    float m = length(p-c*clamp(dot(p,c),0.0,r)); 
+    return max(l,m*sign(c.y*p.x-c.x*p.y));
+}
+
+float sdOrientedVesica( vec2 p, vec2 a, vec2 b, float w )
+{
+    float r = 0.5*length(b-a);
+    float d = 0.5*(r*r-w*w)/w;
+    vec2 v = (b-a)/r;
+    vec2 c = (b+a)*0.5;
+    vec2 q = 0.5*abs(mat2(v.y,v.x,-v.x,v.y)*(p-c));
+    vec3 h = (r*q.x<d*(q.y-r)) ? vec3(0.0,r,0.0) : vec3(-d,0.0,d+w);
+    return length( q-h.xy) - h.z;
+}
+
+float sdMoon(vec2 p, float d, float ra, float rb, float intensity, float iTime )
+{
+    // 对称性
+    // 原函数利用了上下对称性。这意味着我们的噪声也会随之上下对称（镜像）。
+    // 如果想要非对称的噪声，需要修改这行代码的逻辑，但为了保持 SDF 算法的稳定性，
+    // 我们暂时保留这个对称性，这意味着月亮咬痕的上下两半是镜像的。
+    p.y = abs(p.y);
+
+    // 相对小圆心角度
+    // 小圆圆心在 (d, 0)。
+    // 我们需要计算当前点 p 到 (d, 0) 的向量。
+    vec2 relP = p - vec2(d, 0.0);
+    
+    // 获取角度。atan(y, x) 返回弧度
+    float angle = atan(relP.y, relP.x);
+
+    //扰动后半径
+    // 这里的 rb 变成了变量
+    // 注意：我们把 getNoise 的结果加到 rb 上
+    float rbNoisy = rb + getRuffleNoise(angle,iTime, intensity);
+
+    //原本公式中所有用到 rb 的地方，现在全部都要换成 rbNoisy
+
+    float a = (ra*ra - rbNoisy*rbNoisy + d*d)/(2.0*d);
+    float b = sqrt(max(ra*ra-a*a,0.0));
+    
+    if( d*(p.x*b-p.y*a) > d*d*max(b-p.y,0.0) )
+          return length(p-vec2(a,b));
+    
+    return max( (length(p)-ra),
+               -(length(p-vec2(d,0))-rbNoisy));
+}
+
+//do not use this directly, use sUnion instead
+//this method encapsuled in the sUnion func
+float sMinCubic( float a, float b, float k )
+{
+    float h = max( k - abs(a-b), 0.0 )/k;
+    return min( a, b ) - h*h*h*k*(1.0/6.0);
+}
+
+float sDiffCubic( float d1, float d2, float k )
+{
+    float h = max( k - abs(d1 + d2), 0.0 )/k;
+    return max( d1, -d2 ) + h*h*h*k*(1.0/6.0);
+}
+
+//input: 1d distance and 3d color.
+//this function returns the smooth union of d(sdf result) and color
+vec4 sUnion(vec4 dc1, vec4 dc2, float k) {
+    float h = clamp( 0.5 + 0.5 * (dc1.x - dc2.x) / k, 0.0, 1.0 );
+    float dist = sMinCubic(dc1.x, dc2.x, k);
+    vec3 col = mix(dc1.yzw, dc2.yzw, h);
+    return vec4(dist, col);
+}
+
+float hash( vec2 p ) {
+    p = vec2( dot(p,vec2(127.1,311.7)),
+              dot(p,vec2(269.5,183.3)) );
+    return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+//value noise
+float noise( vec2 x ) {
+    vec2 i = floor(x);
+    vec2 f = fract(x);
+
+    //smoothstep for interpolation
+    vec2 u = f*f*(3.0-2.0*f);
+
+    //random values for the 4 corners of the cell
+    float a = hash( i + vec2(0.0,0.0) );
+    float b = hash( i + vec2(1.0,0.0) );
+    float c = hash( i + vec2(0.0,1.0) );
+    float d = hash( i + vec2(1.0,1.0) );
+
+    //bilinearly interpolate
+    return mix(mix( a, b, u.x), mix( c, d, u.x), u.y);
+}
+
+//returns the distances to the nearest and second-nearest cell centers
+vec2 voronoi(vec2 uv, float time) {
+    vec2 g = floor(uv); // Grid cell
+    vec2 f = fract(uv); // Position within cell
+    
+    vec2 closest = vec2(1.0); // .x is dist to nearest, .y is dist to 2nd nearest
+
+    //check 3x3 grid of cells around the current one
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            vec2 offset = vec2(x, y);
+            vec2 cellPos = g + offset;
+            
+            // pseudo random anime
+            float h = hash(cellPos);
+            vec2 pointPos = 0.5 + 0.4 * vec2(sin(time * 0.7 + h * 6.28), cos(time * 0.7 + h * 6.28)); // 2*PI
+            
+            float dist = length(offset + pointPos - f);
+
+            //update two closest distances
+            if (dist < closest.x) {
+                closest.y = closest.x;
+                closest.x = dist;
+            } else if (dist < closest.y) {
+                closest.y = dist;
+            }
+        }
+    }
+    return closest;
+}
+
+vec3 getWavePattern(vec2 uv, vec3 mainCol, vec3 subCol, float scale, float iTime) {
+    vec2 scaledUV = uv * scale * 6.0;
+
+    vec2 dists = voronoi(scaledUV, iTime);
+
+    // The first distance gives a nice gradient within the cell
+    float cellInterior = dists.x;
+    
+    // The difference between the two distances defines the cell edge
+    float edgeDistance = dists.y - dists.x;
+
+    vec3 waterColor = mainCol;
+    waterColor = mix(subCol, waterColor, smoothstep(0.0, 0.4, cellInterior));
+
+    //flicker mask
+    float flickerNoiseSample = noise(scaledUV * 0.5 + iTime * 0.2);
+    //a second, smoother noise for shimmer instead of a raw hash
+    float shimmerNoise = noise(scaledUV * 1.5 + iTime * -0.5);
+    float shimmer = (0.6 + 0.4 * sin(iTime * 8.0 + shimmerNoise * 6.28));
+    
+    float flickerMask = mix(0.5, 1.0, flickerNoiseSample);
+    flickerMask *= shimmer;
+
+    //bloom effect
+    float edgeWidth = fwidth(edgeDistance) * 1.5; // Get pixel width for AA
+    //sharp core
+    float sharpGlow = pow(1.0 - smoothstep(0.0, edgeWidth * 2.0, edgeDistance), 40.0);
+    //softer bloom
+    float softGlow = pow(1.0 - smoothstep(0.0, edgeWidth * 8.0, edgeDistance), 10.0);
+
+    //combine the bloom layers
+    float totalBloom = sharpGlow * 1.0 + softGlow * 0.3;
+
+    //combine bloom with the flicker mask
+    float sparkle = totalBloom * flickerMask;
+    
+    vec3 sparkleColor = vec3(0.9, 1.0, 1.0);
+    
+    //combine water color with the sparkling highlights
+    vec3 finalColor = waterColor + sparkle * sparkleColor;
+
+    return clamp(finalColor, 0.0, 1.0);
+}
+
+vec2 getWaterRipple(vec2 uv, vec2 center, float time) {
+    vec2 dv = center - uv;
+    float dis = length(dv);
+
+    //ripple parameters
+    float frequency = 15.0;
+    float speed = 5.0;
+    float maxRadius = 1.2;
+    float amplitude = 0.03;
+
+    //sine Factor (The wave)
+    //usually "- time" looks like expanding waves, "+ time" looks like imploding.
+    float sinFactor = sin(dis * frequency - time * speed);
+
+    //damping/Falloff
+    //limits the effect to a specific radius and fades it out at the edges
+    float damp = max(0.0, maxRadius - dis);
+    
+    damp = pow(damp, 2.0); 
+
+    vec2 dir = normalize(dv);
+    
+    //avoid 0/0
+    if (dis < 0.0001) dir = vec2(0.0); 
+
+    //final offset
+    return dir * sinFactor * damp * amplitude;
+}
+
+void main() {
+    vec2 st = gl_FragCoord.xy / u_resolution.xy;
+    // st: left bottom (0,0) to right top (1,1), linear
+    
+    vec2 centcoord = st * 2.0 - 1.0;
+
+    vec2 mousePos = u_mouse.xy / u_resolution.xy;
+    vec2 rippleCenter = mousePos * 2.0 - 1.0;
+
+    //calculate the offset
+    vec2 rippleOffset = getWaterRipple(centcoord, rippleCenter, u_time);
+
+    //apply offset
+    centcoord += rippleOffset;
+    // centcoord: left bottom (-1,-1) to right top (1,1), linear
+
+    vec3 bodyColor = getBodyPattern(centcoord,vec3(0.4314, 0.1765, 0.502), vec3(0.2, 0.7, 0.8), vec3(0.3765, 0.1608, 0.8039),1.952,2.032, u_time); 
+    vec3 backfinColor = getFinPattern(centcoord,vec3(0.1608, 0.5961, 0.7843),vec3(0.3451, 0.0235, 0.0235),23.0,-0.192,vec2(-0.200,0.590),1.128,u_time);
+    vec3 bellyfinColor = getFinPattern(centcoord,vec3(0.1647, 0.5686, 0.8784),vec3(0.3451, 0.0235, 0.0235),21.0,-0.856,vec2(0.480,0.630),1.80,u_time);
+    vec3 tailColor = getFinPattern(centcoord,vec3(0.1412, 0.502, 0.7804),vec3(0.3451, 0.0235, 0.0235),18.0,-0.416,vec2(-0.790,0.580),1.0,u_time);
+    vec3 waterColor = getWavePattern(centcoord, vec3(0.3686, 0.7176, 0.7686), vec3(0.549, 0.7922, 0.8039), 0.7, u_time);
+    vec2 uv = centcoord;
+    // --- 1. THE HEAD (ID:0) ---
+    vec2 p0 = centcoord - vec2(0.300, -0.080);
+    vec2 a0 = vec2(0.640, 0.760); 
+    vec2 b0 = vec2(0.140, 0.120); 
+    float w0 = 0.176;             
+    float d0 = sdOrientedVesica(p0, a0, b0, w0);
+    // --- 2. THE BODY (ID:1) ---
+    vec2 p1 = centcoord - vec2(0.640, 0.340);
+    float theta1 = -4.256;
+    mat2 rotate1 = mat2(cos(theta1), -sin(theta1), sin(theta1), cos(theta1));
+    float he1 = 0.488;
+    float ra1 = 0.204;
+    float rb1 = 0.144;
+    float bu1 = 0.528;
+    float d1 = sdEgg(rotate1 * p1, he1, ra1, rb1, bu1);
+    // --- 3. THE TAIL (ID:2) ---
+    vec2 p2 = centcoord - vec2(0.140, 0.140);
+    float theta2 = -4.360;
+    mat2 rotate2 = mat2(cos(theta2), -sin(theta2), sin(theta2), cos(theta2));
+    vec2 c2 = vec2(0.920, 0.280); 
+    float r2 = 1.00; 
+    float itime2 = u_time; 
+    float d2 = sdBettaTailShape(rotate2 * p2, c2, r2, itime2);
+   //--- 4. THE BACK FIN (ID:3) ---
+   vec2 p3 = centcoord - vec2(-0.610,0.410);
+   float theta3 = 0.448;
+   mat2 rotate3 = mat2(cos(theta3), -sin(theta3), sin(theta3), cos(theta3));
+   float cfactor = 0.736;
+   mat2 compress = mat2(cfactor*st.x,0,0,1);
+   float pm3 = -0.440;
+   float ra3 = 0.480;
+   float rb3 = 0.688;
+   float iTime3 = u_time;
+   float intensity3 = 0.042;
+   float d3 = sdMoon(rotate3*compress*p3,pm3,ra3,rb3,intensity3,iTime3);
+	// --- 5. The belly fin(ID:4) ---
+   vec2 p4 = centcoord - vec2(0.390,0.050);
+   float theta4 = -5.408;
+   mat2 rotate4 = mat2(cos(theta4), -sin(theta4), sin(theta4), cos(theta4));
+   float pm4 = -0.752;
+   float ra4 = 0.376;
+   float rb4 = 0.616;
+   float iTime4 = u_time;
+   float intensity4 = 0.042;
+   float d4 = sdMoon(rotate4*p4,pm4,ra4,rb4,intensity4,iTime4);    
+
+    // COLOR
+
+    // --- 6. CLIP AND COMBINE ---
+    float headBodyK = 0.096;
+    float finK = 0.04;
+    //k for smooth union & color lerp factor
+    float clipMargin = -0.01;
+    
+    float dHeadbody = sMinCubic(d0, d1, headBodyK);
+    float dTail = d2;
+    float dBackfin = d3;
+    float dBellyfin = d4;
+
+    //we use xxCore for and ONLY for clipping redundant d of fin
+    float dBodyCore = dHeadbody + clipMargin;
+    float dTailCore = dTail + clipMargin-0.1;
+
+    dBackfin = sDiffCubic(dBackfin, dBodyCore, 0.02);
+    dBellyfin = sDiffCubic(dBellyfin, dBodyCore, 0.02);
+    dBellyfin = sDiffCubic(dBellyfin, d3, 0.02);
+    dBellyfin = sDiffCubic(dBellyfin,dTailCore,0.02);
+
+    vec4 tempRes = vec4(dHeadbody, bodyColor);
+    tempRes = sUnion(tempRes, vec4(dBackfin, backfinColor), finK);
+    tempRes = sUnion(tempRes, vec4(dBellyfin, bellyfinColor), finK);
+
+    if(dBackfin<0.0&&dTail<0.01){
+        tempRes.yzw = tailColor;
+    }
+
+    tempRes = sUnion(tempRes,vec4(dTail,tailColor), finK);
+
+    float dFinal = tempRes.x;
+
+    float mask = step(dFinal,0.0);
+
+    float eyeMask = step(length(centcoord - vec2(0.800, 0.53)) , 0.0450);
+    eyeMask = remap(eyeMask, 0.0, 1.0, 1.0, 0.0);
+    float eyeMaskHighlight = step(length(centcoord - vec2(0.790, 0.54)) , 0.01);
+    //eyeMaskHighlight = remap(eyeMaskHighlight, 0.0, 1.0, 1.0, 0.0);
+    //temp cancel
+    
+    // Output color
+    //colour_out = vec4(tempRes.yzw,1.0);
+    colour_out = mask * vec4(tempRes.yzw, 1.0)+ (1.0 - mask) * vec4(waterColor, 1.0);
+    //the most violent way to draw eye
+    colour_out.xyz = colour_out.xyz * eyeMask;
+    colour_out.xyz += eyeMaskHighlight * vec3(1.0, 1.0, 1.0);
+    colour_out = clamp(colour_out, 0.0, 1.0);
+}`;
+
+      const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+      gl.useProgram(shaderProgram);
+      //#endregion
+
+      //#region geometry
+      const posIn = gl.getAttribLocation(shaderProgram, "position");
+      // Full screen quad: x,y from -1 to 1
+      const vertices = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
+
+      const vao = gl.createVertexArray();
+      const vbo = gl.createBuffer();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(posIn);
+      gl.vertexAttribPointer(posIn, 2, gl.FLOAT, false, 0, 0);
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      //#endregion
+
+      const uResolutionLoc = gl.getUniformLocation(
+        shaderProgram,
+        "u_resolution"
+      );
+      const uTimeLoc = gl.getUniformLocation(shaderProgram, "u_time");
+      const uMouseLoc = gl.getUniformLocation(shaderProgram, "u_mouse");
+      let mouseX = 0;
+      let mouseY = 0;
+      requestAnimationFrame(draw);
+
+      function draw(time) {
+        time *= 0.001;
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.bindVertexArray(vao);
+        gl.uniform2f(uResolutionLoc, canvas.width, canvas.height);
+        gl.uniform1f(uTimeLoc, time);
+        gl.uniform2f(uMouseLoc, mouseX, mouseY);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        requestAnimationFrame(draw);
+      }
+
+      // helpers
+      function compileShader(ingl, type, source) {
+        const shader = ingl.createShader(type);
+        ingl.shaderSource(shader, source);
+        ingl.compileShader(shader);
+        if (!ingl.getShaderParameter(shader, ingl.COMPILE_STATUS)) {
+          console.error(
+            "Shader compile error: " + ingl.getShaderInfoLog(shader)
+          );
+          ingl.deleteShader(shader);
+          return null;
+        }
+        return shader;
+      }
+
+      function initShaderProgram(ingl, vsSrc, fsSrc) {
+        const vertexShader = compileShader(ingl, ingl.VERTEX_SHADER, vsSrc);
+        const fragmentShader = compileShader(ingl, ingl.FRAGMENT_SHADER, fsSrc);
+        const prog = ingl.createProgram();
+        ingl.attachShader(prog, vertexShader);
+        ingl.attachShader(prog, fragmentShader);
+        ingl.linkProgram(prog);
+        if (!ingl.getProgramParameter(prog, ingl.LINK_STATUS)) {
+          console.error(
+            "Unable to initialize the shader program: " +
+              ingl.getProgramInfoLog(prog)
+          );
+          return null;
+        }
+        return prog;
+      }
+
+      function updateMousePosition(canvas, event) {
+        //returns mouse pos, considering css resolution factor
+        // 1. 获取 Canvas 在浏览器视口中的位置和 CSS 尺寸 (700x700)
+        const rect = canvas.getBoundingClientRect();
+
+        // 2. 计算 Canvas 内部像素 (2100) 与 CSS 像素 (700) 的比例
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        // 3. 获取鼠标相对于 Canvas CSS 边界的坐标 (0 ~ 700)
+        // event.clientX 是鼠标相对于视口的坐标
+        const cssX = event.clientX - rect.left;
+        const cssY = event.clientY - rect.top;
+
+        // 4. 映射到 Canvas 内部像素坐标 (0 ~ 2100)
+        // 并处理 WebGL 的 Y 轴翻转 (WebGL 原点在左下，DOM 在左上)
+        mouseX = cssX * scaleX;
+        mouseY = canvas.height - cssY * scaleY;
+      }
+
+      // 事件监听
+      canvas.addEventListener("mousemove", (e) => {
+        updateMousePosition(canvas, e);
+      });
+    </script>
+  </body>
+</html>

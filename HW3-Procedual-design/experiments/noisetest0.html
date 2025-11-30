@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Procedural Texture Viewer</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #000;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="glCanvas"></canvas>
+
+    <script id="vertexShader" type="x-shader/x-vertex">
+      attribute vec4 position;
+      void main() {
+          gl_Position = position;
+      }
+    </script>
+
+    <script id="fragmentShader" type="x-shader/x-fragment">
+      precision mediump float;
+
+      // Uniforms passed from JavaScript
+      uniform vec2 iResolution; // Screen resolution (width, height)
+      uniform float iTime;      // Time in seconds (optional, for animation)
+
+      // --- Helper Functions (Zebra Implementation) ---
+
+      // Simple hash function for noise generation
+      // 简单的哈希函数
+      float hash(vec2 p) {
+          return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+      }
+
+      // Value noise to create organic randomness
+      // 值噪声：用于产生有机的随机感
+      float noise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          // Smoothstep interpolation for smooth edges
+          // 平滑插值
+          f = f * f * (3.0 - 2.0 * f);
+
+          float a = hash(i);
+          float b = hash(i + vec2(1.0, 0.0));
+          float c = hash(i + vec2(0.0, 1.0));
+          float d = hash(i + vec2(1.0, 1.0));
+
+          return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+      }
+
+      // Main entry point for the fragment shader
+      // 片元着色器主入口
+      void main() {
+          // Get current pixel coordinate (gl_FragCoord is built-in)
+          // 获取当前像素坐标
+          vec2 fragCoord = gl_FragCoord.xy;
+
+          // Normalize coordinates to [0, 1]
+          // 归一化坐标
+          vec2 uv = fragCoord / iResolution.xy;
+
+          // Fix aspect ratio to prevent stretching
+          // 修正长宽比
+          uv.x *= iResolution.x / iResolution.y;
+
+          // --- Zebra Parameters ---
+          float frequency = 20.0;   // Stripe density (条纹密度)
+          float noiseScale = 5.0;   // Noise detail (噪声细节)
+          float distortion = 3.0;   // Warp strength (扭曲强度)
+
+          // Calculate noise
+          float n = noise(uv * noiseScale);
+
+          // Apply domain warping (add noise to coordinate)
+          // 应用坐标扭曲
+          float pattern = sin((uv.x + n * distortion) * frequency);
+
+          // Sharpen edges
+          float stripes = smoothstep(0.4, 0.6, pattern * 0.5 + 0.5);
+
+          // Set the pixel color
+          gl_FragColor = vec4(vec3(stripes), 1.0);
+      }
+    </script>
+
+    <script>
+      // --- JavaScript Boilerplate to Setup WebGL ---
+
+      const canvas = document.getElementById("glCanvas");
+      const gl = canvas.getContext("webgl");
+
+      if (!gl) {
+        alert("WebGL not supported");
+      }
+
+      // 1. Compile Shader Function
+      // 编译着色器的辅助函数
+      function createShader(gl, type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          console.error(gl.getShaderInfoLog(shader));
+          gl.deleteShader(shader);
+          return null;
+        }
+        return shader;
+      }
+
+      // 2. Get Shader Source Code from HTML scripts
+      // 获取 Shader 源码
+      const vsSource = document.getElementById("vertexShader").text;
+      const fsSource = document.getElementById("fragmentShader").text;
+
+      // 3. Create and Link Program
+      // 创建并链接程序
+      const vertexShader = createShader(gl, gl.VERTEX_SHADER, vsSource);
+      const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+      const program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error(gl.getProgramInfoLog(program));
+      }
+
+      gl.useProgram(program);
+
+      // 4. Setup Geometry (A big rectangle covering the screen)
+      // 设置几何体（覆盖全屏的大矩形）
+      const positionBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      const positions = [-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1];
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array(positions),
+        gl.STATIC_DRAW
+      );
+
+      const positionAttributeLocation = gl.getAttribLocation(
+        program,
+        "position"
+      );
+      gl.enableVertexAttribArray(positionAttributeLocation);
+      gl.vertexAttribPointer(
+        positionAttributeLocation,
+        2,
+        gl.FLOAT,
+        false,
+        0,
+        0
+      );
+
+      // 5. Get Uniform Locations
+      // 获取 Uniform 变量的位置
+      const resolutionLocation = gl.getUniformLocation(program, "iResolution");
+      const timeLocation = gl.getUniformLocation(program, "iTime");
+
+      // 6. Render Loop
+      // 渲染循环
+      function render(time) {
+        time *= 0.001; // Convert to seconds
+
+        // Resize canvas to full screen
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+
+        // Pass uniforms to shader
+        // 传递参数给 Shader
+        gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
+        gl.uniform1f(timeLocation, time);
+
+        // Draw
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        requestAnimationFrame(render);
+      }
+
+      requestAnimationFrame(render);
+    </script>
+  </body>
+</html>

@@ -13,6 +13,7 @@
       }
       canvas {
         border: 1px solid white;
+        border-radius: 18px;
       }
     </style>
   </head>
@@ -281,6 +282,8 @@
 
       //#region initialize
       const canvas = document.getElementById("glCanvas");
+
+      /** @type {WebGL2RenderingContext} */
       const gl = canvas.getContext("webgl2");
       if (!gl) throw new Error("WebGL 2.0 unsupported!");
 
@@ -292,6 +295,7 @@
       const vsSource = document.getElementById("vertex-shader").text.trim();
       const fsSource = document.getElementById("fragment-shader").text.trim();
       const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+      gl.useProgram(shaderProgram);
       //#endregion
 
       //#region locations
@@ -358,8 +362,6 @@
         time *= 0.001;
 
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        gl.useProgram(shaderProgram);
-
         //"global" uniforms
         gl.uniformMatrix4fv(
           uniformLocations.projectionMatrix,
