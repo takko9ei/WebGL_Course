@@ -14,10 +14,22 @@ also, i finished an advanced version, using my own helper tool, drawing a Americ
 
 ## HW1
 
-this hw asks to draw tomething using webgl.
+Goal: Use WebGL to render:
 
-i took several files, to get familiar with webgl 2.0, especially vao, vbo stuffs, because i only have unity shaderlab, shadergraph, bender shader nodes stuffs experience before.
+A dot with exponential decay.
 
-test, test1, test2, given_skeleton, these files are test. please ignore them.
+A moving rectangle (using Signed Distance Functions/SDF).
 
-for real hw proj, refer to assignment1, 2, 3. :3
+A letter (using SDF).
+
+Note: Only files prefixed with assignment are the actual submissions. Other files (excluding Assignments 0, 1, and 2) are for WebGL practice and serve as a boilerplate for future tasks.
+
+## HW2
+
+Goal: Render a rotating octahedron.
+
+## HW3
+
+Goal: Render a fish using a single fragment shader (Shadertoy style).
+
+Files: Please check the assignment folder. It contains two files (a .glsl file and a browser-compatible .html file) that produce identical renderings.
