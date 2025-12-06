@@ -1,0 +1,352 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN" "http://www.w3.org/TR/REC-html40/loose.dtd">
+<!-- saved from url=(0056)https://esslab.jp/~ess/teaching/2025/acg/hw/07_template/ -->
+ <!-- Li Zhuohang's homework 4, modified from the WebGL sample downloaded from esslab -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+ 
+ <title>WebGL Shading Template</title>
+</head>
+<body>
+ <canvas id="glCanvas" style="width:400px; height:400px;"></canvas>
+ 
+ <script id="vertex-shader" type="notjs">
+#version 300 es
+precision mediump float;
+in vec4 a_position;
+in vec4 a_normal;
+
+out vec3 v_worldPos;
+out vec3 v_normal;
+out vec3 v_objPos;
+
+uniform float u_time;
+
+const float M_PI = 3.14159265358979323846;  /* pi */
+
+void main() {
+   const float theta = M_PI / 4.0;
+   float c = cos(theta);
+   float s = sin(theta);
+   mat4 Rx = mat4(
+      1.0, 0.0, 0.0, 0.0,
+      0.0,  c,   s,  0.0,
+      0.0, -s,   c,  0.0,
+      0.0, 0.0, 0.0, 1.0
+   );
+   
+   float phi = u_time / 4.0;
+   c = cos(phi);
+   s = sin(phi);
+   mat4 Ry = mat4(
+       c,  0.0, -s,  0.0,
+      0.0, 1.0, 0.0, 0.0,
+       s,  0.0,  c,  0.0,
+      0.0, 0.0, 0.0, 1.0
+   );
+   
+   float psi = M_PI / 16.0;
+   c = cos(psi);
+   s = sin(psi);
+   mat4 Rz = mat4(
+       c,   s,  0.0, 0.0,
+      -s,   c,  0.0, 0.0,
+      0.0, 0.0, 1.0, 0.0,
+      0.0, 0.0, 0.0, 1.0
+   );
+   
+   const float sca = 0.5;
+   const mat4 S = mat4(
+      sca, 0.0, 0.0, 0.0,
+      0.0, sca, 0.0, 0.0,
+      0.0, 0.0, sca, 0.0,
+      0.0, 0.0, 0.0, 1.0
+   );
+   
+   // Model Matrix
+   mat4 H = Ry * Rz * Rx * S;
+
+   //outputs
+   
+   //world position
+   gl_Position = H * a_position;
+   v_worldPos = gl_Position.xyz;
+   
+   //transform normal
+   // Note: Since S is uniform scaling, we can just use mat3(H). 
+   // If non-uniform scaling was used, we would need transpose(inverse(mat3(H))).
+   v_normal = mat3(H) * a_normal.xyz;
+   
+   //v_objPos for procedural texture
+   v_objPos = a_position.xyz; 
+}
+</script>
+ <script id="fragment-shader" type="notjs">
+#version 300 es
+precision mediump float;
+
+// Inputs from Vertex Shader
+in vec3 v_worldPos;
+in vec3 v_normal;
+in vec3 v_objPos;
+
+out vec4 color_out;
+
+uniform float u_time;
+
+float pseudoRand(vec3 p) {
+    p = fract(p * 0.3183099 + .1);
+    p *= 17.0;
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+
+float noise(vec3 x) {
+    vec3 i = floor(x);
+    vec3 f = fract(x);
+    f = f * f * (3.0 - 2.0 * f);//likely-smoothstep
+    
+    return mix(mix(mix( pseudoRand(i + vec3(0,0,0)), pseudoRand(i + vec3(1,0,0)), f.x),
+                   mix( pseudoRand(i + vec3(0,1,0)), pseudoRand(i + vec3(1,1,0)), f.x), f.y),
+               mix(mix( pseudoRand(i + vec3(0,0,1)), pseudoRand(i + vec3(1,0,1)), f.x),
+                   mix( pseudoRand(i + vec3(0,1,1)), pseudoRand(i + vec3(1,1,1)), f.x), f.y), f.z);
+}
+
+void main() {
+    vec3 N = normalize(v_normal);
+    //although this is parallel projection, do not need cam pos to render basic shape, but we need view vector to apply lighting
+    vec3 V = normalize(vec3(0.0, 0.0, 5.0) - v_worldPos); 
+
+    //procedual marble
+    float noiseVal = noise(v_objPos * 4.0); 
+    //sin(x + noise)
+    float pattern = sin(v_objPos.y * 10.0 + noiseVal * 4.0);
+
+    //this to control color
+    vec3 baseColor = mix(vec3(0.1, 0.1, 0.1), vec3(0.9, 0.9, 0.9), smoothstep(-0.5, 0.5, pattern));
+
+    //lightings
+    vec3 lighting = vec3(0.0);
+
+    //ambient
+    vec3 ambient = vec3(0.3, 0.15, 0.3);
+    lighting += ambient;
+
+    //directional
+    vec3 dirLightDir = normalize(vec3(1.0, 1.0, 1.0)); // From top-right-front
+    vec3 dirLightColor = vec3(1.0,1.0,1.0);
+    float diff1 = max(dot(N, dirLightDir), 0.0);
+    // Blinn-Phong Specular
+    vec3 H1 = normalize(dirLightDir + V);
+    float spec1 = pow(max(dot(N, H1), 0.0), 32.0); // Shininess 32
+    lighting += (diff1 * dirLightColor) + (spec1 * vec3(1.0));
+
+    // Light 3: Point Light (Orbiting)
+    // Moves in a circle above the cube
+    //we do not need it move
+    //TODO modify this
+    vec3 pointLightPos = vec3(sin(u_time * 2.0) * 1.5, 1.0, cos(u_time * 2.0) * 1.5);
+    vec3 pointLightColor = vec3(1.0, 1.0, 1.0); // Warm orange light
+    
+    vec3 L_pointVec = pointLightPos - v_worldPos;
+    float dist = length(L_pointVec);
+    vec3 L_point = normalize(L_pointVec);
+    
+    float diff2 = max(dot(N, L_point), 0.0);
+    // Attenuation (Linear + Quadratic falloff)
+    float attenuation = 1.0 / (1.0 + 0.2 * dist + 0.2 * dist * dist);
+    
+    // Specular for point light
+    vec3 H2 = normalize(L_point + V);
+    float spec2 = pow(max(dot(N, H2), 0.0), 32.0);
+
+    lighting += (diff2 * pointLightColor * attenuation) + (spec2 * pointLightColor * attenuation);
+
+    // --- Final Color ---
+    color_out = vec4(baseColor * lighting, 1.0);
+}
+</script>
+ <script type="text/javascript">
+function createProgram( gl, vertexSrc, fragmentSrc ) {
+   let vshd = gl.createShader( gl.VERTEX_SHADER );
+   gl.shaderSource( vshd, vertexSrc );
+   gl.compileShader( vshd );
+   if (!gl.getShaderParameter( vshd, gl.COMPILE_STATUS ))
+      throw new Error( "Unable to compile shader: "+gl.getShaderInfoLog( vshd ));
+   let fshd = gl.createShader( gl.FRAGMENT_SHADER );
+   gl.shaderSource( fshd, fragmentSrc );
+   gl.compileShader( fshd );
+   if (!gl.getShaderParameter( fshd, gl.COMPILE_STATUS ))
+      throw new Error( "Unable to compile shader: "+gl.getShaderInfoLog( fshd ));
+   let prog = gl.createProgram();
+   gl.attachShader( prog, vshd );
+   gl.attachShader( prog, fshd );
+   gl.linkProgram( prog );
+   if (!gl.getProgramParameter( prog, gl.LINK_STATUS ))
+      throw new Error( "Unable to link program: "+gl.getProgramInfoLog( prog ));
+   return prog;
+}
+
+function init() {
+   var c = document.getElementById("glCanvas");
+
+   /** @type {WebGL2RenderingContext} */
+   var gl = c.getContext('webgl2');
+
+   if (!gl)
+      throw new Error("WebGL unsupported!");
+
+   // Clear screen
+   gl.clearColor(0, 0, 0, 0);
+   gl.clear(gl.COLOR_BUFFER_BIT);
+
+   var vertexPosBuffer = gl.createBuffer();//vbo 0
+   gl.bindBuffer(gl.ARRAY_BUFFER, vertexPosBuffer);
+   const vertices = [
+  // Front face
+  -1.0, -1.0,  1.0,
+   1.0, -1.0,  1.0,
+   1.0,  1.0,  1.0,
+  -1.0,  1.0,  1.0,
+  
+  // Back face
+  -1.0, -1.0, -1.0,
+  -1.0,  1.0, -1.0,
+   1.0,  1.0, -1.0,
+   1.0, -1.0, -1.0,
+  
+  // Top face
+  -1.0,  1.0, -1.0,
+  -1.0,  1.0,  1.0,
+   1.0,  1.0,  1.0,
+   1.0,  1.0, -1.0,
+  
+  // Bottom face
+  -1.0, -1.0, -1.0,
+   1.0, -1.0, -1.0,
+   1.0, -1.0,  1.0,
+  -1.0, -1.0,  1.0,
+  
+  // Right face
+   1.0, -1.0, -1.0,
+   1.0,  1.0, -1.0,
+   1.0,  1.0,  1.0,
+   1.0, -1.0,  1.0,
+  
+  // Left face
+  -1.0, -1.0, -1.0,
+  -1.0, -1.0,  1.0,
+  -1.0,  1.0,  1.0,
+  -1.0,  1.0, -1.0,
+];
+   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+   vertexPosBuffer.itemSize = 3;
+   vertexPosBuffer.numItems = 4*6;
+
+   var normalPosBuffer = gl.createBuffer();//vbo 1
+   gl.bindBuffer(gl.ARRAY_BUFFER, normalPosBuffer);
+   const normals = [
+  // Front face
+   0.0, 0.0, 1.0,
+   0.0, 0.0, 1.0,
+   0.0, 0.0, 1.0,
+   0.0, 0.0, 1.0,
+  
+  // Back face
+   0.0, 0.0, -1.0,
+   0.0, 0.0, -1.0,
+   0.0, 0.0, -1.0,
+   0.0, 0.0, -1.0,
+  
+  // Top face
+   0.0, 1.0, 0.0,
+   0.0, 1.0, 0.0,
+   0.0, 1.0, 0.0,
+   0.0, 1.0, 0.0,
+  
+  // Bottom face
+   0.0, -1.0, 0.0,
+   0.0, -1.0, 0.0,
+   0.0, -1.0, 0.0,
+   0.0, -1.0, 0.0,
+  
+  // Right face
+   1.0, 0.0, 0.0,
+   1.0, 0.0, 0.0,
+   1.0, 0.0, 0.0,
+   1.0, 0.0, 0.0,
+  
+  // Left face
+  -1.0, 0.0, 0.0,
+  -1.0, 0.0, 0.0,
+  -1.0, 0.0, 0.0,
+  -1.0, 0.0, 0.0,
+];
+   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
+   normalPosBuffer.itemSize = 3;
+   normalPosBuffer.numItems = 4*6;
+
+	const indexBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+	// This array defines each face as two triangles, using the
+	// indices into the vertex array to specify each triangle's
+	// position.
+	const indices = [
+    0,  1,  2,      0,  2,  3,    // front
+    4,  5,  6,      4,  6,  7,    // back
+    8,  9,  10,     8,  10, 11,   // top
+    12, 13, 14,     12, 14, 15,   // bottom
+    16, 17, 18,     16, 18, 19,   // right
+    20, 21, 22,     20, 22, 23,   // left
+	];
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+   // Create our shader program
+   var vs = document.querySelector("#vertex-shader").text.trim();
+   var fs = document.querySelector("#fragment-shader").text.trim();
+   var program = createProgram(gl, vs, fs);
+   gl.useProgram(program);
+
+   // Get the vertex attribute
+   program.vertexPosAttrib = gl.getAttribLocation(program, 'a_position');
+   program.normalPosAttrib = gl.getAttribLocation(program, 'a_normal');
+
+   // Remember to add and use u_time uniform in your shaders
+   var u_time_loc = gl.getUniformLocation(program, "u_time");
+
+   gl.enable(gl.DEPTH_TEST);
+
+   function render( ms_since_page_loaded ) {
+      // Convert to seconds and send to shader
+      gl.uniform1f( u_time_loc, ms_since_page_loaded * 0.001 );
+
+      // Draw scene here using uniform float u_time to animate
+      // Below is an example using the relevant code from the WebGL skeleton
+      gl.useProgram( program );
+     
+      // Vertices
+      gl.bindBuffer(gl.ARRAY_BUFFER, vertexPosBuffer);
+      gl.enableVertexAttribArray(program.vertexPosAttrib);
+      gl.vertexAttribPointer(program.vertexPosAttrib, vertexPosBuffer.itemSize, gl.FLOAT, false, 0, 0);
+      //q: will it automatically fill vec 4 with zero,or one?
+     
+      // Normals
+      gl.bindBuffer(gl.ARRAY_BUFFER, normalPosBuffer);
+      gl.enableVertexAttribArray(program.normalPosAttrib);
+      gl.vertexAttribPointer(program.normalPosAttrib, normalPosBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+		// Indices
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+
+      // Draw
+		gl.drawElements( gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0 );
+
+      // Request animation again
+      requestAnimationFrame( render );
+   }
+
+   // First render which will request animation
+   render( 0 );
+}
+window.onload = init;
+ </script>
+
+
+</body></html>
