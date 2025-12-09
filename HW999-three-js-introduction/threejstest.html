@@ -41,6 +41,16 @@
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0x333333); // Replace gl.clearColor (设置背景色)
 
+      // [新增] 添加基本光照 (Basic Lighting)
+      // 环境光 (AmbientLight): 均匀照亮场景中的所有物体，没有方向
+      const ambientLight = new THREE.AmbientLight(0x666666); 
+      scene.add(ambientLight);
+
+      // 平行光 (DirectionalLight): 类似太阳光，有特定方向，能产生明暗对比
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 2.0); // 强度设为2.0
+      directionalLight.position.set(2, 2, 5); // 设置光源位置
+      scene.add(directionalLight);
+
       /**
        * CAMERA (相机)
        * PerspectiveCamera 参数解释：
@@ -62,9 +72,13 @@
 
       /**
        * MATERIAL (材质) - 替代了原本的 Vertex/Fragment Shaders
-       * MeshBasicMaterial 是一种不受光照影响的简单材质，显示纯色。
+       * [修改] 使用 MeshPhongMaterial 替代 MeshBasicMaterial 以支持光照效果
+       * [修改] 将颜色设置为浅蓝色 (0xADD8E6)
        */
-      const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+      const material = new THREE.MeshPhongMaterial({ 
+          color: 0xADD8E6,
+          shininess: 50 // 设置高光亮度
+      });
 
       /**
        * MESH (网格) - 替代了 VAO/VBO 的绑定过程
@@ -72,6 +86,17 @@
        */
       const cube = new THREE.Mesh(geometry, material);
       
+      // [新增] 添加白色线框 (White Wireframe)
+      // 创建一个新的 Mesh作为线框，使用 wireframe: true
+      const wireframeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
+      const wireframeCube = new THREE.Mesh(geometry, wireframeMaterial);
+      
+      // 为了防止线框和实体模型重叠产生的闪烁(Z-fighting)，稍微放大一点线框
+      wireframeCube.scale.setScalar(1.001); 
+      
+      // 将线框作为子对象添加到 cube，这样它会跟随 cube 旋转
+      cube.add(wireframeCube);
+
       scene.add(cube); // 将物体加入场景
 
       // --- 3. Animation Loop (渲染循环) ---
