@@ -1,0 +1,99 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Three.js Introduction</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+        }
+      }
+    </script>
+    <style>
+        /* 简单的样式重置，确保 Canvas 正常显示 */
+        body { margin: 0; } 
+    </style>
+  </head>
+  <body>
+    <canvas id="myCanvas"></canvas>
+
+    <script type="module">
+      import * as THREE from "three";
+
+      // --- 1. Setup (场景设置) ---
+      
+      const canvas = document.getElementById("myCanvas");
+
+      /** * RENDERER (渲染器)
+       * 这里使用了我们刚才讨论过的 { canvas: canvas } 写法。
+       * 作用：让 Three.js 使用我们HTML里已经写好的那个 <canvas> 标签，而不是自己创建一个新的。
+       */
+      const renderer = new THREE.WebGLRenderer({ 
+          canvas: canvas,
+          antialias: true // Optional: Smooth edges (开启抗锯齿)
+      });
+      renderer.setSize(800, 800); // Set the size of the drawing buffer (设置渲染尺寸)
+
+      /**
+       * SCENE (场景)
+       * 相当于 WebGL 的世界容器。所有物体都要 add 到这里面才能被画出来。
+       */
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x333333); // Replace gl.clearColor (设置背景色)
+
+      /**
+       * CAMERA (相机)
+       * PerspectiveCamera 参数解释：
+       * 1. 75: Field of View (FOV) - 视野角度，类似相机的焦距。
+       * 2. 800/800: Aspect Ratio - 宽高比，这里对应我们设置的 canvas 尺寸。
+       * 3. 0.1: Near clipping plane - 比这个距离近的物体不会被渲染。
+       * 4. 1000: Far clipping plane - 比这个距离远的物体不会被渲染。
+       */
+      const camera = new THREE.PerspectiveCamera(75, 800 / 800, 0.1, 1000);
+      camera.position.z = 2; // Move camera back so we can see the object (拉远相机)
+
+      // --- 2. Create Object (创建物体) ---
+
+      /**
+       * GEOMETRY (几何体) - 替代了原本的 vertices 数组
+       * BoxGeometry 创建一个立方体的数据（顶点、法线、UV等）。
+       */
+      const geometry = new THREE.BoxGeometry(1, 1, 1);
+
+      /**
+       * MATERIAL (材质) - 替代了原本的 Vertex/Fragment Shaders
+       * MeshBasicMaterial 是一种不受光照影响的简单材质，显示纯色。
+       */
+      const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+
+      /**
+       * MESH (网格) - 替代了 VAO/VBO 的绑定过程
+       * 将几何体和材质组合成一个具体的对象。
+       */
+      const cube = new THREE.Mesh(geometry, material);
+      
+      scene.add(cube); // 将物体加入场景
+
+      // --- 3. Animation Loop (渲染循环) ---
+
+      /**
+       * 这是一个递归循环，替代了只调用一次的 gl.drawArrays。
+       * requestAnimationFrame 会在屏幕每次刷新时调用这个函数。
+       */
+      function animate() {
+        requestAnimationFrame(animate);
+
+        // Update rotation (让方块动起来)
+        cube.rotation.x += 0.01;
+        cube.rotation.y += 0.01;
+
+        // Draw (绘制指令)
+        // 相当于 WebGL 中的 gl.useProgram, gl.bindBuffer, gl.drawArrays 的集合体
+        renderer.render(scene, camera);
+      }
+
+      // Start the loop
+      animate();
+    </script>
+  </body>
+</html>
