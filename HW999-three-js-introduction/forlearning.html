@@ -1,46 +1,135 @@
 <html>
-    <head>
-        <meta charset="utf-8" />
-        <title>Three.js Introduction</title>
-        <script type="importmap">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Three.js Introduction</title>
+    <script type="importmap">
             {
                 "imports": {
                     "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
                 }
             }
         </script>
-    </head>
-    <body>
-        <canvas id="myCanvas"></canvas>
-        <script type="module">
-            import * as THREE from "three";
-            const canvas = document.getElementById("myCanvas");
-            const renderer = new THREE.WebGLRenderer({
-                canvas: canvas
-            });
-            renderer.setSize(800, 800);
-            const scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x333333);
-            const camera = new THREE.PerspectiveCamera(90, 800/800, 0.1, 1000);
-            camera.position.z = 2;
-            const geometry = new THREE.BoxGeometry(1, 1, 1);
-            const material0 = new THREE.MeshLambertMaterial({ color: 0x00ff00, shininess: 10 });
-            const material1 = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
-            const cube = new THREE.Mesh(geometry, material0);
-            const wireframeCube = new THREE.Mesh(geometry, material1);
-            wireframeCube.scale.set(1.1, 1.1, 1.1);
-            cube.add(wireframeCube);
-            scene.add(cube);
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 2.0); // 强度设为2.0
-            directionalLight.position.set(2, 2, 5); // 设置光源位置
-            scene.add(directionalLight);
-            function animate() {
-                requestAnimationFrame(animate);
-                cube.rotation.x += 0.01;
-                cube.rotation.y += 0.01;
-                renderer.render(scene, camera);
+</head>
+
+<body>
+    <canvas id="myCanvas"></canvas>
+    <video id="input_video" style="display:none"></video>
+    <!-- MediaPipe Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <script type="module">
+        import * as THREE from "three";
+        const canvas = document.getElementById("myCanvas");
+        const renderer = new THREE.WebGLRenderer({
+            canvas: canvas,
+            antialias: true
+        });
+        renderer.setSize(800, 800);
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x333333);
+        const camera = new THREE.PerspectiveCamera(90, 800 / 800, 0.1, 1000);
+        camera.position.z = 2;
+        const geometry = new THREE.BoxGeometry(1, 1, 1);
+        const material0 = new THREE.MeshLambertMaterial({ color: 0x00ff00, shininess: 10 });
+        const material1 = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
+        const cube = new THREE.Mesh(geometry, material0);
+        const wireframeCube = new THREE.Mesh(geometry, material1);
+        wireframeCube.scale.set(1.1, 1.1, 1.1);
+        cube.add(wireframeCube);
+        scene.add(cube);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 2.0); // 强度设为2.0
+        directionalLight.position.set(2, 2, 5); // 设置光源位置
+        scene.add(directionalLight);
+
+        // Hand Tracking Setup
+        const videoElement = document.getElementById('input_video');
+
+        function onResults(results) {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+
+                // Wrist
+                const p0 = new THREE.Vector3(-landmarks[0].x, -landmarks[0].y, landmarks[0].z);
+                // Middle Finger MCP
+                const p9 = new THREE.Vector3(-landmarks[9].x, -landmarks[9].y, landmarks[9].z);
+                // Index Finger MCP
+                const p5 = new THREE.Vector3(-landmarks[5].x, -landmarks[5].y, landmarks[5].z);
+                // Pinky Finger MCP
+                const p17 = new THREE.Vector3(-landmarks[17].x, -landmarks[17].y, landmarks[17].z);
+
+                // Calculate basis vectors
+                // Hand Up: Wrist to Middle Finger.
+                // With inverted Y (-y), Wrist is lower value, Finger is higher value?
+                // Original Y (screen): Wrist(0.8) > Finger(0.2).
+                // Inverted Y: Wrist(-0.8) < Finger(-0.2).
+                // So Finger - Wrist = (-0.2) - (-0.8) = +0.6. Points UP.
+                const handUp = new THREE.Vector3().subVectors(p9, p0).normalize();
+
+                // Hand Right (Index to Pinky)
+                // Palm facing camera: Index(Left) < Pinky(Right).
+                // x increases to Right. So Pinky - Index is +x.
+                const p5_to_p17 = new THREE.Vector3().subVectors(p17, p5).normalize();
+
+                // Cross product to get Normal (Z)
+                // Right x Up = Normal (Out of screen usually)
+                const handNormal = new THREE.Vector3().crossVectors(p5_to_p17, handUp).normalize();
+
+                // Re-calculate Right vector to ensure orthogonality
+                const handRight = new THREE.Vector3().crossVectors(handUp, handNormal).normalize();
+
+                // Create rotation matrix
+                const matrix = new THREE.Matrix4();
+                matrix.makeBasis(handRight, handUp, handNormal);
+
+                // Apply rotation
+                cube.quaternion.setFromRotationMatrix(matrix);
+
+                // Since MediaPipe signals are mirrored/inverted potentially, we might might need to tweak axes.
             }
-            animate();
-        </script>
-    </body>
+            renderer.render(scene, camera);
+        }
+
+        const hands = new Hands({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }
+        });
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+        hands.onResults(onResults);
+
+        const cameraUtils = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 1280,
+            height: 720
+        });
+        cameraUtils.start();
+
+        // Original animate loop isn't strictly needed for rotation if onResults drives it, 
+        // but we might want it for other things or continuous rendering if tracking is slow.
+        // Let's keep a loop but remove auto-rotation.
+        function animate() {
+            requestAnimationFrame(animate);
+            // cube.rotation.x += 0.01; // Removed
+            // cube.rotation.y += 0.01; // Removed
+            // We render in onResults to sync with data, but if no hands found, it won't render.
+            // Better to simple render here too or just cache last rotation.
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+
 </html>
